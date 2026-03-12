@@ -532,6 +532,8 @@ function addPeer(id, name, agentId = null) {
     el.onclick = (e) => { 
         e.stopPropagation();
         currentTransferTarget = id; 
+        const agentName = agentId ? `AGENT_${agentId.toUpperCase()}` : name;
+        showToast(`ESTABLISHING BRIDGE WITH ${agentName}...`, 'info');
         if (fileInput) fileInput.click(); 
     };
     

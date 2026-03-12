@@ -393,6 +393,7 @@ body.crt-on::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 .avatar {
@@ -425,6 +426,7 @@ body.crt-on::before {
   border-radius: 50%;
   border: 1px solid var(--wave-color);
   z-index: 0;
+  pointer-events: none;
 }
 
 .wave1 {
@@ -522,6 +524,14 @@ body.crt-on::before {
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+.peer-node::after {
+  content: "";
+  position: absolute;
+  top: -20px; left: -20px; right: -20px; bottom: -20px;
+  background: transparent;
+  z-index: -1;
+}
+
 .peer-node:active {
     transform: scale(0.9) !important;
 }
@@ -553,13 +563,14 @@ body.crt-on::before {
 }
 
 .peer-id-label {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     color: var(--accent-primary);
-    background: rgba(255, 49, 49, 0.1);
-    padding: 0.1rem 0.4rem;
-    border: 1px solid rgba(255, 49, 49, 0.2);
-    margin-top: 2px;
+    background: rgba(57, 255, 20, 0.1);
+    padding: 0.1rem 0.6rem;
+    border: 1px solid var(--accent-primary);
+    margin-top: 5px;
     letter-spacing: 1px;
+    font-weight: bold;
 }
 
 .peer-details {
