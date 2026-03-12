@@ -265,6 +265,23 @@ wss.on('connection', (ws, req) => {
 
         // Routing WebRTC signaling messages
         switch (message.type) {
+            case 'discover':
+                // Client is looking for a specific node (from QR)
+                if (message.targetId) {
+                    const targetNode = Array.from(clients.values()).find(c => c.id === message.targetId);
+                    if (targetNode) {
+                        // Notify both about each other regardless of IP
+                        ws.send(JSON.stringify({
+                            type: 'peer-joined',
+                            peer: { id: targetNode.id, name: targetNode.name }
+                        }));
+                        targetNode.socket.send(JSON.stringify({
+                            type: 'peer-joined',
+                            peer: { id: sender.id, name: sender.name }
+                        }));
+                    }
+                }
+                break;
             case 'offer':
             case 'answer':
             case 'candidate':

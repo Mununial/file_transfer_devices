@@ -417,18 +417,28 @@ function connectSignaling() {
                 showToast(`NODE_READY: ${myName}`, 'success');
                 msg.peers.forEach(p => addPeer(p.id, p.name));
                 
-                // If we scanned a QR, initiate auto-connect
+                // If we scanned a QR, initiate discovery override
                 if (autoConnectTarget) {
                     const targetPeer = msg.peers.find(p => p.id === autoConnectTarget);
                     if (targetPeer) {
                         showToast(`PHASING INTO TARGET: ${targetPeer.name}`, 'info');
                         setTimeout(() => startConnection(autoConnectTarget), 1000);
+                    } else {
+                        // Not in same IP pool, ask server for direct discovery
+                        sendSignaling({ type: 'discover', targetId: autoConnectTarget });
                     }
                 }
                 break;
             case 'peer-joined':
                 addPeer(msg.peer.id, msg.peer.name);
                 showToast(`PROXIMITY_ALERT: ${msg.peer.name}`, 'success');
+                
+                // If this joined peer is our QR target, auto-connect now
+                if (autoConnectTarget === msg.peer.id) {
+                    showToast(`PHASING INTO TARGET: ${msg.peer.name}`, 'info');
+                    setTimeout(() => startConnection(msg.peer.id), 1000);
+                    autoConnectTarget = null; // Reset once triggered
+                }
                 break;
             case 'peer-left':
                 removePeer(msg.peerId);
