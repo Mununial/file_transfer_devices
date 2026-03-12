@@ -534,7 +534,7 @@ function addPeer(id, name, agentId = null) {
     };
     
     if (peersContainer) peersContainer.appendChild(el);
-    peers.set(id, { name, el, agentId, connection: null, dataChannel: null });
+    peers.set(id, { name, el, agentId, connection: null, dataChannel: null, queuedFile: null });
 }
 
 function updatePeerIdentity(id, agentId) {
@@ -627,15 +627,24 @@ function setupDataChannel(peerId, dc) {
     dc.onopen = () => {
         console.log(`BRIDGE OPENED WITH NODE_${peerId.substring(0, 4)}`);
         
-        // If we came from a QR scan, trigger the file picker immediately
+        const peer = peers.get(peerId);
+        if (!peer) return;
+
+        // Priority 1: Instant Share from QR scan
         if (autoSendPending) {
             autoSendPending = false; 
             currentTransferTarget = peerId;
             const fInput = getEl('fileInput');
             if (fInput) {
-                showToast('BRIDGE ESTABLISHED. SELECT INTEL TO TRANSMIT.', 'success');
+                showToast('BRIDGE ESTABLISHED. SELECT INTEL.', 'success');
                 fInput.click();
             }
+        } 
+        // Priority 2: Queued file from manual click before connection
+        else if (peer.queuedFile) {
+            const fileToLink = peer.queuedFile;
+            peer.queuedFile = null;
+            sendFileHeader(peerId, fileToLink);
         }
     };
     dc.onclose = () => {
@@ -675,11 +684,18 @@ fileInput.addEventListener('change', async (e) => {
     if (!file || !currentTransferTarget) return;
 
     const peer = peers.get(currentTransferTarget);
-    if (!peer.connection || (peer.connection.connectionState !== 'connected' && peer.connection.connectionState !== 'stable')) {
-        await startConnection(currentTransferTarget);
-        setTimeout(() => sendFileHeader(currentTransferTarget, file), 1500);
-    } else {
+    if (!peer) return;
+
+    if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
         sendFileHeader(currentTransferTarget, file);
+    } else {
+        // Queue the file and ensure connection is starting
+        peer.queuedFile = file;
+        showToast('ESTABLISHING SECURE BRIDGE...', 'info');
+        
+        if (!peer.connection || peer.connection.connectionState === 'disconnected') {
+            await startConnection(currentTransferTarget);
+        }
     }
 
     fileInput.value = ''; 
