@@ -693,58 +693,82 @@ async function startSendingFile(peerId) {
 
 // Receiving
 async function handleIncomingFileRequest(msg, senderId) {
-    const sender = peers.get(senderId);
-    if (!sender) return;
+    try {
+        const sender = peers.get(senderId);
+        if (!sender) return;
 
-    // Import Void-Proof Shielding Key
-    encryptionKey = await importKey(msg.vpsKey);
+        // Import Void-Proof Shielding Key
+        encryptionKey = await importKey(msg.vpsKey);
 
-    incomingFile = {
-        name: msg.name,
-        size: msg.size,
-        mime: msg.mime,
-        hash: msg.hash, // Integrity Hash
-        senderId: senderId
-    };
-    receivedChunks = [];
-    receivedSize = 0;
+        incomingFile = {
+            name: msg.name,
+            size: msg.size,
+            mime: msg.mime,
+            hash: msg.hash, // Integrity Hash
+            senderId: senderId
+        };
+        receivedChunks = [];
+        receivedSize = 0;
 
-    modalTitle.textContent = "THE GATE IS OPEN. ESTABLISHING SECURE TUNNEL.";
-    modalContent.innerHTML = `
-        <div class="file-info">
-            <i class="ri-folder-shield-2-line"></i>
-            <div class="file-details">
-                <span class="file-name">${msg.name}</span>
-                <span class="file-size">${(msg.size / (1024*1024)).toFixed(2)} MB</span>
-                <span style="color: var(--accent-primary); font-size: 0.7rem; margin-top: 5px;">[VOID-PROOF SHIELDING ACTIVE]</span>
-            </div>
-        </div>
-        <div class="progress-container hidden" id="receiveProgressContainer">
-            <div class="progress-bar" id="receiveProgressBar"></div>
-            <span class="progress-label" id="progressLabel">ENCRYPTION STRENGTH: 0%</span>
-        </div>
-    `;
+        const mTitle = getEl('modalTitle');
+        const mContent = getEl('modalContent');
+        const mActions = getEl('modalActions');
+        const mOverlay = getEl('modalOverlay');
 
-    modalActions.innerHTML = `
-        <button class="btn btn-secondary" id="btnReject">ABORT</button>
-        <button class="btn btn-primary" id="btnAccept">INITIATE TRANSFER</button>
-    `;
+        if (mTitle) mTitle.textContent = "THE GATE IS OPEN. ESTABLISHING SECURE TUNNEL.";
+        if (mContent) {
+            mContent.innerHTML = `
+                <div class="file-info">
+                    <i class="ri-folder-shield-2-line"></i>
+                    <div class="file-details">
+                        <span class="file-name">${msg.name}</span>
+                        <span class="file-size">${(msg.size / (1024*1024)).toFixed(2)} MB</span>
+                        <span style="color: var(--accent-primary); font-size: 0.7rem; margin-top: 5px;">[VOID-PROOF SHIELDING ACTIVE]</span>
+                    </div>
+                </div>
+                <div class="progress-container hidden" id="receiveProgressContainer">
+                    <div class="progress-bar" id="receiveProgressBar"></div>
+                    <span class="progress-label" id="progressLabel">ENCRYPTION STRENGTH: 0%</span>
+                </div>
+            `;
+        }
 
-    modalOverlay.classList.remove('hidden');
+        if (mActions) {
+            mActions.innerHTML = `
+                <button class="btn btn-secondary" id="btnReject">ABORT</button>
+                <button class="btn btn-primary" id="btnAccept">INITIATE TRANSFER</button>
+            `;
+        }
 
-    document.getElementById('btnReject').onclick = () => {
-        sender.dataChannel.send(JSON.stringify({ type: 'transfer-rejected' }));
-        modalOverlay.classList.add('hidden');
-        incomingFile = null;
-    };
+        if (mOverlay) mOverlay.classList.remove('hidden');
 
-    document.getElementById('btnAccept').onclick = () => {
-        document.getElementById('btnReject').style.display = 'none';
-        document.getElementById('btnAccept').style.display = 'none';
-        document.getElementById('receiveProgressContainer').classList.remove('hidden');
-        startHum();
-        sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
-    };
+        const btnReject = getEl('btnReject');
+        const btnAccept = getEl('btnAccept');
+
+        if (btnReject) {
+            btnReject.onclick = () => {
+                sender.dataChannel.send(JSON.stringify({ type: 'transfer-rejected' }));
+                if (mOverlay) mOverlay.classList.add('hidden');
+                incomingFile = null;
+            };
+        }
+
+        if (btnAccept) {
+            btnAccept.onclick = () => {
+                const rejectBtn = getEl('btnReject');
+                const acceptBtn = getEl('btnAccept');
+                if (rejectBtn) rejectBtn.style.display = 'none';
+                if (acceptBtn) acceptBtn.style.display = 'none';
+                const progContainer = getEl('receiveProgressContainer');
+                if (progContainer) progContainer.classList.remove('hidden');
+                startHum();
+                sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
+            };
+        }
+    } catch (err) {
+        console.error('TRANSFER_INIT_FAILED:', err);
+        showToast('SIGNAL_BREACH: FAILED TO OPEN TUNNEL', 'error');
+    }
 }
 
 function receiveChunk(data) {
