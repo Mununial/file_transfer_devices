@@ -12,6 +12,7 @@ let ws;
 let myId;
 let myName;
 let autoConnectTarget = null; // Target from QR scan
+let autoSendPending = false; // Trigger file picker after QR pair
 let currentUser = JSON.parse(localStorage.getItem('gatekeeper_session')) || null;
 const peers = new Map();
 const CHUNK_SIZE = 16384; 
@@ -428,6 +429,7 @@ function connectSignaling() {
                 
                 // If we scanned a QR, initiate discovery override
                 if (autoConnectTarget) {
+                    autoSendPending = true; // Flag for instant sharing
                     const targetPeer = msg.peers.find(p => p.id === autoConnectTarget);
                     if (targetPeer) {
                         showToast(`PHASING INTO TARGET: ${targetPeer.name}`, 'info');
@@ -444,6 +446,7 @@ function connectSignaling() {
                 
                 // If this joined peer is our QR target, auto-connect now
                 if (autoConnectTarget === msg.peer.id) {
+                    autoSendPending = true; // Flag for instant sharing
                     showToast(`PHASING INTO TARGET: ${msg.peer.name}`, 'info');
                     setTimeout(() => startConnection(msg.peer.id), 1000);
                     autoConnectTarget = null; // Reset once triggered
@@ -621,7 +624,20 @@ async function handleCandidate(msg) {
 function setupDataChannel(peerId, dc) {
     dc.binaryType = 'arraybuffer';
 
-    dc.onopen = () => console.log(`BRIDGE OPENED WITH NODE_${peerId.substring(0, 4)}`);
+    dc.onopen = () => {
+        console.log(`BRIDGE OPENED WITH NODE_${peerId.substring(0, 4)}`);
+        
+        // If we came from a QR scan, trigger the file picker immediately
+        if (autoSendPending) {
+            autoSendPending = false; 
+            currentTransferTarget = peerId;
+            const fInput = getEl('fileInput');
+            if (fInput) {
+                showToast('BRIDGE ESTABLISHED. SELECT INTEL TO TRANSMIT.', 'success');
+                fInput.click();
+            }
+        }
+    };
     dc.onclose = () => {
         console.log(`BRIDGE CLOSED`);
         stopHum();
