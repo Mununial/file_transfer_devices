@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☢️</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GATEKEEPER PROTOCOL - SECURE NODE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body class="crt-off">
+    <!-- View 1: Entry Portal -->
+    <div id="view-entry" class="view">
+        <div class="portal-centered">
+            <div class="blinking-cursor"></div>
+            <button id="btn-enter" class="btn-giant">[ ACCESS TERMINAL ]</button>
+        </div>
+    </div>
+
+    <!-- View 2: Authentication -->
+    <div id="view-auth" class="view hidden">
+        <div class="auth-center-shell">
+            <div id="auth-card" class="auth-card">
+                <!-- Front Side: Login -->
+                <div class="auth-face auth-front">
+                    <div class="top-secret-stamp">TOP SECRET</div>
+                    <div id="form-login">
+                        <h3>CLEARANCE REQUIRED</h3>
+                        <div class="field-row">
+                            <label>AGENT_ID:</label>
+                            <input type="text" id="login-id" class="terminal-input" placeholder="...">
+                        </div>
+                        <div class="field-row">
+                            <label>PASSWORD:</label>
+                            <input type="password" id="login-pass" class="terminal-input" placeholder="...">
+                        </div>
+                        <div class="auth-actions">
+                            <button id="btn-login" class="btn btn-primary">VERIFY</button>
+                            <p class="auth-switch">NEW AGENT? <span id="switch-to-signup">ENLIST_HERE</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Back Side: Signup -->
+                <div class="auth-face auth-back">
+                    <div class="top-secret-stamp">TOP SECRET</div>
+                    <div id="form-signup">
+                        <h3>REGISTRATION</h3>
+                        <div class="field-row">
+                            <label>FULLNAME:</label>
+                            <input type="text" id="signup-name" class="terminal-input" placeholder="...">
+                        </div>
+                        <div class="field-row">
+                            <label>AGENT_ID:</label>
+                            <input type="text" id="signup-id" class="terminal-input" placeholder="...">
+                        </div>
+                        <div class="field-row">
+                            <label>PASSWORD:</label>
+                            <input type="password" id="signup-pass" class="terminal-input" placeholder="...">
+                        </div>
+                        <div class="auth-actions">
+                            <button id="btn-register" class="btn btn-primary">AUTHORIZE</button>
+                            <p class="auth-switch">ALREADY ENLISTED? <span id="switch-to-login">SIGN_IN</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="glitch-overlay"></div>
+        </div>
+    </div>
+
+    <!-- View 3: Dashboard / Command Center -->
+    <div id="view-dashboard" class="view hidden">
+        <header class="sticky-id">
+            <div class="logo">
+                <i class="ri-radar-line"></i> CLASSIFIED: GATEKEEPER PROTOCOL
+            </div>
+            <div class="agent-badge">
+                <div class="badge-text">
+                    <span class="pulse-dot online"></span>
+                    <span id="agent-display-name">AGENT: ...</span>
+                    <span class="id-tag"> [ID: <span id="agent-display-id">...</span>]</span>
+                </div>
+                <button id="btn-logout" class="btn-icon" title="Terminate Session"><i class="ri-logout-box-r-line"></i></button>
+            </div>
+        </header>
+
+        <div class="dashboard-layout">
+            <aside class="sidebar">
+                <nav>
+                    <button class="nav-item active" data-target="radar-view"><i class="ri-broadcast-line"></i> PROXIMITY_SCAN</button>
+                    <button class="nav-item" data-target="initialize-transfer"><i class="ri-lock-password-line"></i> INITIALIZE_TRANSFER</button>
+                    <button class="nav-item" data-target="vault-view"><i class="ri-safe-2-line"></i> SECURE_VAULT</button>
+                    <button class="nav-item" data-target="map-view"><i class="ri-map-pin-line"></i> SIGNAL_MAP</button>
+                </nav>
+                <div class="sidebar-status">
+                    <div class="status">
+                        <div class="status-indicator offline" id="connectionStatusIndicator"></div>
+                        <span id="connectionStatusText">SIGNAL_IDLE</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main id="main-content" class="progressive-load">
+                <!-- Proximity Scan View -->
+                <div id="radar-view" class="content-view">
+                    <div class="radar-container">
+                        <div class="my-profile">
+                            <div class="avatar my-avatar">
+                                <i class="ri-user-received-2-line"></i>
+                            </div>
+                            <div class="wave wave1"></div>
+                            <div class="wave wave2"></div>
+                            <div class="radar-sweep"></div>
+                        </div>
+                        <div id="peersContainer"></div>
+                    </div>
+                    <div class="view-label">SCANNING_FOR_PROXIMITY_SIGNALS...</div>
+                </div>
+
+                <!-- Secure Vault View -->
+                <div id="vault-view" class="content-view hidden">
+                    <div class="thematic-placeholder">
+                        <i class="ri-safe-2-line"></i>
+                        <h4>SECURE_VAULT_ARCHIVE</h4>
+                        <p>ACCESSING CLASSIFIED INTEL FILES... <br/> [DATA_ENCRYPTED_BY_VOID_PROOF_SHIELDING]</p>
+                        <div class="terminal-loader"></div>
+                    </div>
+                </div>
+
+                <!-- Signal Map View -->
+                <div id="map-view" class="content-view hidden">
+                    <div class="thematic-placeholder">
+                        <i class="ri-map-pin-line"></i>
+                        <h4>LAB_PSIONIC_MAP</h4>
+                        <p>TRACKING SUB-DIMENSIONAL DISTURBANCES... <br/> [NO_BREACH_DETECTED_IN_LOCAL_SECTORS]</p>
+                        <div class="radar-mini"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="fileInput" style="display: none;" />
+    <input type="file" id="shareFileInput" style="display: none;" />
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h3 id="modalTitle">SECURITY ALERT</h3>
+            <div class="modal-content" id="modalContent"></div>
+            <div class="modal-actions" id="modalActions"></div>
+        </div>
+    </div>
+
+    <!-- QR ID Modal -->
+    <div id="qrModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>AGENT_IDENT_SCAN</h3>
+            <div class="modal-content" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+                <div id="qrcode" style="padding: 1rem; background: white; border: 4px solid var(--accent-primary);"></div>
+                <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                    SCAN TO ESTABLISH PROXIMITY LINK <br/>
+                    [NETWORK_INTERFACE: <span id="local-ip-display">...</span>]
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="document.getElementById('qrModal').classList.add('hidden')">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
