@@ -3,13 +3,9 @@
 // Gatekeeper Protocol Logic
 // ---------------------------
 
-const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:3000'
-  : 'https://opendrop.onrender.com';
-
-const SIGNALING_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'ws://localhost:3000'
-  : 'wss://opendrop.onrender.com';
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_URL = isLocal ? 'http://localhost:3000' : window.location.origin;
+const SIGNALING_URL = isLocal ? 'ws://localhost:3000' : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 // State
 let ws;
