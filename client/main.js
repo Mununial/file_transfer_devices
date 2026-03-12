@@ -663,7 +663,13 @@ function setupDataChannel(peerId, dc) {
             } else if (msg.type === 'transfer-rejected') {
                 showToast('TRANSFER ABORTED BY REMOTE NODE', 'error');
             } else if (msg.type === 'file-complete') {
-                finishReceivingFile();
+                finishReceivingFile(peerId);
+            } else if (msg.type === 'transfer-finished-ack') {
+                // Next file in queue can now be sent safely
+                const peer = peers.get(peerId);
+                if (peer && peer.fileQueue.length > 0) {
+                    sendFileHeader(peerId, peer.fileQueue[0]);
+                }
             }
         } else {
             // Binary chunk received (Encrypted)
@@ -768,17 +774,13 @@ async function startSendingFile(peerId) {
                 }
             } else {
                 dc.send(JSON.stringify({ type: 'file-complete' }));
-                showToast(`INTEL SECURED: ${file.name.toUpperCase()}`, 'success');
+                showToast(`INTEL TRANSMITTED: ${file.name.toUpperCase()}`, 'info');
                 playSuccessSynth();
                 stopHum();
                 
                 peer.pendingFile = null;
                 peer.fileQueue.shift(); // Remove the completed file
-
-                // If more files in queue, initiate next sequence
-                if (peer.fileQueue.length > 0) {
-                    setTimeout(() => sendFileHeader(peerId, peer.fileQueue[0]), 500);
-                }
+                // Wait for 'transfer-finished-ack' before sending next
             }
         };
         reader.readAsArrayBuffer(slice);
@@ -883,10 +885,11 @@ function receiveChunk(data) {
     if (label) label.textContent = `SIGNAL STABILITY: ${progress.toFixed(0)}%`;
 }
 
-function finishReceivingFile() {
+function finishReceivingFile(senderId) {
     if (!incomingFile) return;
     stopHum();
     
+    const peer = peers.get(senderId);
     const blob = new Blob(receivedChunks, { type: incomingFile.mime });
     
     // Perform Void-Integrity Check
@@ -901,6 +904,7 @@ function finishReceivingFile() {
                 name: incomingFile.name,
                 size: incomingFile.size,
                 blob: blob,
+                sender: peer ? peer.name : 'UNKNOWN_AGENT',
                 timestamp: new Date().toLocaleTimeString()
             });
             renderVault();
@@ -913,11 +917,16 @@ function finishReceivingFile() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            showToast(`INTEL SECURED. INTEGRITY VERIFIED.`, 'success');
+            showToast(`INTEL SECURED: ${incomingFile.name.toUpperCase()}`, 'success');
         } else {
             showToast(`VOID CORRUPTION DETECTED. ABORTING.`, 'error');
         }
         
+        // Signal clearance for next file if any
+        if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
+            peer.dataChannel.send(JSON.stringify({ type: 'transfer-finished-ack' }));
+        }
+
         modalOverlay.classList.add('hidden');
         incomingFile = null;
         receivedChunks = [];
@@ -940,13 +949,13 @@ function renderVault() {
 
     list.innerHTML = vaultFiles.map((file, index) => `
         <div class="vault-item">
-            <div class="vault-item-info">
-                <i class="ri-file-shield-line"></i>
-                <div>
-                    <div class="vault-filename">${file.name}</div>
-                    <div class="vault-filesize">${(file.size / (1024*1024)).toFixed(2)} MB | ${file.timestamp}</div>
+                <div class="vault-item-info">
+                    <i class="ri-file-shield-line"></i>
+                    <div>
+                        <div class="vault-filename">${file.name}</div>
+                        <div class="vault-filesize">${(file.size / (1024*1024)).toFixed(2)} MB | ${file.timestamp} | FROM: ${file.sender}</div>
+                    </div>
                 </div>
-            </div>
             <button class="btn-vault-download" onclick="downloadFromVault(${index})">
                 <i class="ri-download-2-line"></i>
             </button>
