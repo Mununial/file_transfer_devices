@@ -536,7 +536,7 @@ function addPeer(id, name, agentId = null) {
     };
     
     if (peersContainer) peersContainer.appendChild(el);
-    peers.set(id, { name, el, agentId, connection: null, dataChannel: null, queuedFile: null });
+    peers.set(id, { name, el, agentId, connection: null, dataChannel: null, fileQueue: [] });
 }
 
 function updatePeerIdentity(id, agentId) {
@@ -632,7 +632,7 @@ function setupDataChannel(peerId, dc) {
         const peer = peers.get(peerId);
         if (!peer) return;
 
-        // Priority 1: Instant Share from QR scan
+        // Priority Handshake: Trigger file picker if auto-send is pending
         if (autoSendPending) {
             autoSendPending = false; 
             currentTransferTarget = peerId;
@@ -642,11 +642,10 @@ function setupDataChannel(peerId, dc) {
                 fInput.click();
             }
         } 
-        // Priority 2: Queued file from manual click before connection
-        else if (peer.queuedFile) {
-            const fileToLink = peer.queuedFile;
-            peer.queuedFile = null;
-            sendFileHeader(peerId, fileToLink);
+        // Process mission queue if files were selected before the bridge opened
+        else if (peer.fileQueue.length > 0) {
+            showToast(`TRANSMITTING ${peer.fileQueue.length} INTEL PACKETS...`, 'info');
+            sendFileHeader(peerId, peer.fileQueue[0]);
         }
     };
     dc.onclose = () => {
@@ -682,19 +681,24 @@ async function computeHash(data) {
 }
 
 fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file || !currentTransferTarget) return;
+    const files = Array.from(e.target.files);
+    if (files.length === 0 || !currentTransferTarget) return;
 
     const peer = peers.get(currentTransferTarget);
     if (!peer) return;
 
+    // Add all files to the mission queue
+    peer.fileQueue.push(...files);
+
     if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
-        sendFileHeader(currentTransferTarget, file);
+        // Only start if we aren't already transferring
+        if (!peer.pendingFile) {
+            sendFileHeader(currentTransferTarget, peer.fileQueue[0]);
+        } else {
+            showToast(`QUEUED: ${files.length} FILES ADDED TO TUNNEL.`, 'info');
+        }
     } else {
-        // Queue the file and ensure connection is starting
-        peer.queuedFile = file;
         showToast('ESTABLISHING SECURE BRIDGE...', 'info');
-        
         if (!peer.connection || peer.connection.connectionState === 'disconnected') {
             await startConnection(currentTransferTarget);
         }
@@ -764,10 +768,17 @@ async function startSendingFile(peerId) {
                 }
             } else {
                 dc.send(JSON.stringify({ type: 'file-complete' }));
-                showToast('INTEL SECURED. CLOSING THE GATE.', 'success');
+                showToast(`INTEL SECURED: ${file.name.toUpperCase()}`, 'success');
                 playSuccessSynth();
                 stopHum();
+                
                 peer.pendingFile = null;
+                peer.fileQueue.shift(); // Remove the completed file
+
+                // If more files in queue, initiate next sequence
+                if (peer.fileQueue.length > 0) {
+                    setTimeout(() => sendFileHeader(peerId, peer.fileQueue[0]), 500);
+                }
             }
         };
         reader.readAsArrayBuffer(slice);
