@@ -202,7 +202,8 @@ function getPeers(ip, excludeId) {
         if (client.ip === ip && client.id !== excludeId) {
             peers.push({
                 id: client.id,
-                name: client.name
+                name: client.name,
+                agentId: client.agentId || null
             });
         }
     });
@@ -265,6 +266,14 @@ wss.on('connection', (ws, req) => {
 
         // Routing WebRTC signaling messages
         switch (message.type) {
+            case 'register-agent':
+                sender.agentId = message.agentId;
+                // Notify others that this peer now has an identity
+                broadcastToNetwork(sender.ip, sender.id, {
+                    type: 'peer-updated',
+                    peer: { id: sender.id, name: sender.name, agentId: sender.agentId }
+                });
+                break;
             case 'discover':
                 // Client is looking for a specific node (from QR)
                 if (message.targetId) {
@@ -273,11 +282,11 @@ wss.on('connection', (ws, req) => {
                         // Notify both about each other regardless of IP
                         ws.send(JSON.stringify({
                             type: 'peer-joined',
-                            peer: { id: targetNode.id, name: targetNode.name }
+                            peer: { id: targetNode.id, name: targetNode.name, agentId: targetNode.agentId }
                         }));
                         targetNode.socket.send(JSON.stringify({
                             type: 'peer-joined',
-                            peer: { id: sender.id, name: sender.name }
+                            peer: { id: sender.id, name: sender.name, agentId: sender.agentId }
                         }));
                     }
                 }

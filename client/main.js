@@ -404,7 +404,16 @@ function connectSignaling() {
     updateStatus('connecting', 'SCANNING_SIGNALS...');
     ws = new WebSocket(SIGNALING_URL);
 
-    ws.onopen = () => updateStatus('online', 'SIGNAL_ACTIVE');
+    ws.onopen = () => {
+        updateStatus('online', 'SIGNAL_ACTIVE');
+        // Announce our presence with Identity
+        if (currentUser) {
+            sendSignaling({
+                type: 'register-agent',
+                agentId: currentUser.agentId || currentUser.username
+            });
+        }
+    };
     ws.onmessage = async (event) => {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
@@ -442,6 +451,9 @@ function connectSignaling() {
                 break;
             case 'peer-left':
                 removePeer(msg.peerId);
+                break;
+            case 'peer-updated':
+                updatePeerIdentity(msg.peer.id, msg.peer.agentId);
                 break;
             case 'offer': await handleOffer(msg); break;
             case 'answer': await handleAnswer(msg); break;
@@ -486,7 +498,7 @@ function showToast(message, type = 'success') {
 // ---------------------------
 
 // Peer Management
-function addPeer(id, name) {
+function addPeer(id, name, agentId = null) {
     if (peers.has(id)) return;
 
     const radar = document.querySelector('.radar-container');
@@ -507,15 +519,27 @@ function addPeer(id, name) {
         <div class="avatar">
             <i class="ri-broadcast-line"></i>
         </div>
-        <div class="peer-name">${name}</div>
+        <div class="peer-details">
+            <div class="peer-name">${name}</div>
+            <div class="peer-id-label">${agentId ? `[ID: ${agentId}]` : '[ANONYMOUS]'}</div>
+        </div>
     `;
-    el.onclick = () => { 
+    el.onclick = (e) => { 
+        e.stopPropagation();
         currentTransferTarget = id; 
         if (fileInput) fileInput.click(); 
     };
     
     if (peersContainer) peersContainer.appendChild(el);
-    peers.set(id, { name, el, connection: null, dataChannel: null });
+    peers.set(id, { name, el, agentId, connection: null, dataChannel: null });
+}
+
+function updatePeerIdentity(id, agentId) {
+    const peer = peers.get(id);
+    if (!peer) return;
+    peer.agentId = agentId;
+    const label = peer.el.querySelector('.peer-id-label');
+    if (label) label.textContent = `[ID: ${agentId}]`;
 }
 
 function removePeer(id) {
