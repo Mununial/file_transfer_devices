@@ -11,6 +11,7 @@ const SIGNALING_URL = isLocal ? 'ws://localhost:3000' : `${window.location.proto
 let ws;
 let myId;
 let myName;
+let autoConnectTarget = null; // Target from QR scan
 let currentUser = JSON.parse(localStorage.getItem('gatekeeper_session')) || null;
 const peers = new Map();
 const CHUNK_SIZE = 16384; 
@@ -31,6 +32,10 @@ const views = {
 // ---------------------------
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Check for auto-connect target in URL
+    const params = new URLSearchParams(window.location.search);
+    autoConnectTarget = params.get('target');
+    
     initApp();
 });
 
@@ -316,10 +321,13 @@ function showQRIdentification() {
     if (!qrModal || !qrContainer) return;
     
     qrContainer.innerHTML = '';
-    const currentUrl = window.location.href;
+    
+    // Construct pairing URL
+    const url = new URL(window.location.href);
+    if (myId) url.searchParams.set('target', myId);
     
     new QRCode(qrContainer, {
-        text: currentUrl,
+        text: url.toString(),
         width: 200,
         height: 200,
         colorDark : "#000000",
@@ -408,6 +416,15 @@ function connectSignaling() {
 
                 showToast(`NODE_READY: ${myName}`, 'success');
                 msg.peers.forEach(p => addPeer(p.id, p.name));
+                
+                // If we scanned a QR, initiate auto-connect
+                if (autoConnectTarget) {
+                    const targetPeer = msg.peers.find(p => p.id === autoConnectTarget);
+                    if (targetPeer) {
+                        showToast(`PHASING INTO TARGET: ${targetPeer.name}`, 'info');
+                        setTimeout(() => startConnection(autoConnectTarget), 1000);
+                    }
+                }
                 break;
             case 'peer-joined':
                 addPeer(msg.peer.id, msg.peer.name);
