@@ -13,6 +13,7 @@ let myId;
 let myName;
 let autoConnectTarget = null; // Target from QR scan
 let autoSendPending = false; // Trigger file picker after QR pair
+let vaultFiles = []; // All received files
 let currentUser = JSON.parse(localStorage.getItem('gatekeeper_session')) || null;
 const peers = new Map();
 const CHUNK_SIZE = 16384; 
@@ -76,6 +77,7 @@ function setupDashboardNav() {
         item.onclick = () => {
             const target = item.getAttribute('data-target');
             if (target === 'initialize-transfer') return; // Handled by separate listener
+            if (target === 'vault-view') renderVault();
 
             // Nav UI
             navItems.forEach(i => i.classList.remove('active'));
@@ -882,6 +884,16 @@ function finishReceivingFile() {
         
         if (receivedHash === incomingFile.hash) {
             playSuccessSynth();
+            
+            // Add to Secure Vault
+            vaultFiles.push({
+                name: incomingFile.name,
+                size: incomingFile.size,
+                blob: blob,
+                timestamp: new Date().toLocaleTimeString()
+            });
+            renderVault();
+            
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -900,6 +912,50 @@ function finishReceivingFile() {
         receivedChunks = [];
     });
 }
+
+function renderVault() {
+    const list = getEl('vaultList');
+    const placeholder = document.querySelector('#vault-view .thematic-placeholder');
+    if (!list || !placeholder) return;
+
+    if (vaultFiles.length === 0) {
+        list.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        return;
+    }
+
+    list.classList.remove('hidden');
+    placeholder.classList.add('hidden');
+
+    list.innerHTML = vaultFiles.map((file, index) => `
+        <div class="vault-item">
+            <div class="vault-item-info">
+                <i class="ri-file-shield-line"></i>
+                <div>
+                    <div class="vault-filename">${file.name}</div>
+                    <div class="vault-filesize">${(file.size / (1024*1024)).toFixed(2)} MB | ${file.timestamp}</div>
+                </div>
+            </div>
+            <button class="btn-vault-download" onclick="downloadFromVault(${index})">
+                <i class="ri-download-2-line"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+window.downloadFromVault = (index) => {
+    const file = vaultFiles[index];
+    if (!file) return;
+    const url = URL.createObjectURL(file.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`RE-CONFIGURING CLASSIFIED INTEL...`, 'info');
+};
 
 function sendSignaling(data) {
     if (ws && ws.readyState === WebSocket.OPEN) {

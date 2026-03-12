@@ -94,7 +94,6 @@
                     <button class="nav-item active" data-target="radar-view"><i class="ri-broadcast-line"></i> PROXIMITY_SCAN</button>
                     <button class="nav-item" data-target="initialize-transfer"><i class="ri-lock-password-line"></i> INITIALIZE_TRANSFER</button>
                     <button class="nav-item" data-target="vault-view"><i class="ri-safe-2-line"></i> SECURE_VAULT</button>
-                    <button class="nav-item" data-target="map-view"><i class="ri-map-pin-line"></i> SIGNAL_MAP</button>
                 </nav>
                 <div class="sidebar-status">
                     <div class="status">
@@ -123,11 +122,16 @@
 
                 <!-- Secure Vault View -->
                 <div id="vault-view" class="content-view hidden">
-                    <div class="thematic-placeholder">
-                        <i class="ri-safe-2-line"></i>
-                        <h4>SECURE_VAULT_ARCHIVE</h4>
-                        <p>ACCESSING CLASSIFIED INTEL FILES... <br/> [DATA_ENCRYPTED_BY_VOID_PROOF_SHIELDING]</p>
-                        <div class="terminal-loader"></div>
+                    <div class="vault-container">
+                        <div class="thematic-placeholder">
+                            <i class="ri-safe-2-line"></i>
+                            <h4>SECURE_VAULT_ARCHIVE</h4>
+                            <p>ACCESSING CLASSIFIED INTEL FILES... <br/> [DATA_ENCRYPTED_BY_VOID_PROOF_SHIELDING]</p>
+                            <div class="terminal-loader"></div>
+                        </div>
+                        <div id="vaultList" class="vault-list hidden">
+                            <!-- Files will be injected here -->
+                        </div>
                     </div>
                 </div>
 
