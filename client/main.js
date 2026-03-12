@@ -424,7 +424,7 @@ function connectSignaling() {
                 if (displayId) displayId.textContent = myId.substring(0, 8).toUpperCase();
 
                 showToast(`NODE_READY: ${myName}`, 'success');
-                msg.peers.forEach(p => addPeer(p.id, p.name));
+                msg.peers.forEach(p => addPeer(p.id, p.name, p.agentId));
                 
                 // If we scanned a QR, initiate discovery override
                 if (autoConnectTarget) {
@@ -439,7 +439,7 @@ function connectSignaling() {
                 }
                 break;
             case 'peer-joined':
-                addPeer(msg.peer.id, msg.peer.name);
+                addPeer(msg.peer.id, msg.peer.name, msg.peer.agentId);
                 showToast(`PROXIMITY_ALERT: ${msg.peer.name}`, 'success');
                 
                 // If this joined peer is our QR target, auto-connect now
@@ -768,7 +768,11 @@ async function handleIncomingFileRequest(msg, senderId) {
 
         if (mTitle) mTitle.textContent = "THE GATE IS OPEN. ESTABLISHING SECURE TUNNEL.";
         if (mContent) {
+            const agentName = sender.agentId ? `AGENT_${sender.agentId.toUpperCase()}` : sender.name;
             mContent.innerHTML = `
+                <div class="sender-ident" style="font-size: 0.8rem; color: var(--accent-primary); margin-bottom: 1rem; text-align: center;">
+                    [ORIGIN_AGENT: ${agentName}]
+                </div>
                 <div class="file-info">
                     <i class="ri-folder-shield-2-line"></i>
                     <div class="file-details">
