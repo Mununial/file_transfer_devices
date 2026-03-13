@@ -1308,62 +1308,81 @@ if (shareFileInput) {
         if (rawFiles.length === 0) return;
         shareFileInput.value = '';
 
-        if (modalTitle) modalTitle.textContent = 'INITIALIZING SECURE LINKS...';
+        if (modalTitle) modalTitle.textContent = 'SECURE_TUNNEL_CONFIG';
         if (modalContent) {
             modalContent.innerHTML = `
-                <div id="multi-upload-container" style="max-height: 300px; overflow-y: auto; width: 100%;">
-                    <p class="upload-status" id="uploadStatus">PREPARING ${rawFiles.length} FILES...</p>
-                    <div id="upload-list"></div>
+                <div style="width: 100%; text-align: center;">
+                    <p style="font-size: 0.8rem; color: var(--text-main);">SET PROTECTION FOR ${rawFiles.length} FILES</p>
+                    <div class="field-row" style="margin: 1.5rem 0;">
+                        <label>ACCESS_CODE (OPTIONAL):</label>
+                        <input type="password" id="share-password" class="terminal-input" placeholder="ENTER TO PROTECT OR LEAVE BLANK">
+                    </div>
+                    <button id="btn-start-secure-upload" class="btn btn-primary" style="width: 100%;">START_INITIALIZATION</button>
                 </div>
             `;
         }
         if (modalActions) modalActions.innerHTML = '';
         if (modalOverlay) modalOverlay.classList.remove('hidden');
 
-        const results = [];
-        const uploadList = document.getElementById('upload-list');
-
-        for (let i = 0; i < rawFiles.length; i++) {
-            const rawFile = rawFiles[i];
-            const file = await maybeCompressFile(rawFile);
+        document.getElementById('btn-start-secure-upload').onclick = async () => {
+            const password = document.getElementById('share-password').value;
             
-            const fileRow = document.createElement('div');
-            fileRow.className = 'file-info-row';
-            fileRow.style.marginBottom = '10px';
-            fileRow.innerHTML = `
-                <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
-                    <span>${file.name}</span>
-                    <span id="p-${i}">WAITING...</span>
-                </div>
-                <div class="progress-container">
-                    <div class="progress-bar" id="bar-${i}" style="width: 0%"></div>
-                </div>
-            `;
-            if (uploadList) uploadList.appendChild(fileRow);
-
-            try {
-                const data = await uploadFile(file, (pct) => {
-                    const bar = document.getElementById(`bar-${i}`);
-                    const label = document.getElementById(`p-${i}`);
-                    if (bar) bar.style.width = `${pct}%`;
-                    if (label) label.textContent = `${Math.round(pct)}%`;
-                });
-                results.push(data);
-                if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'READY';
-            } catch (err) {
-                console.error('UPLOAD_ERR', err);
-                if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'FAILED';
+            if (modalTitle) modalTitle.textContent = 'INITIALIZING SECURE LINKS...';
+            if (modalContent) {
+                modalContent.innerHTML = `
+                    <div id="multi-upload-container" style="max-height: 300px; overflow-y: auto; width: 100%;">
+                        <p class="upload-status" id="uploadStatus">PREPARING ${rawFiles.length} FILES...</p>
+                        <div id="upload-list"></div>
+                    </div>
+                `;
             }
-        }
 
-        showMultiLinkResults(results);
+            const results = [];
+            const uploadList = document.getElementById('upload-list');
+
+            for (let i = 0; i < rawFiles.length; i++) {
+                const rawFile = rawFiles[i];
+                const file = await maybeCompressFile(rawFile);
+                
+                const fileRow = document.createElement('div');
+                fileRow.className = 'file-info-row';
+                fileRow.style.marginBottom = '10px';
+                fileRow.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+                        <span>${file.name}</span>
+                        <span id="p-${i}">WAITING...</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="bar-${i}" style="width: 0%"></div>
+                    </div>
+                `;
+                if (uploadList) uploadList.appendChild(fileRow);
+
+                try {
+                    const data = await uploadFile(file, password, (pct) => {
+                        const bar = document.getElementById(`bar-${i}`);
+                        const label = document.getElementById(`p-${i}`);
+                        if (bar) bar.style.width = `${pct}%`;
+                        if (label) label.textContent = `${Math.round(pct)}%`;
+                    });
+                    results.push(data);
+                    if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'READY';
+                } catch (err) {
+                    console.error('UPLOAD_ERR', err);
+                    if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'FAILED';
+                }
+            }
+
+            showMultiLinkResults(results);
+        };
     });
 }
 
-async function uploadFile(file, onProgress) {
+async function uploadFile(file, password, onProgress) {
     return new Promise((resolve, reject) => {
         const formData = new FormData();
         formData.append('file', file);
+        if (password) formData.append('password', password);
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${API_URL}/upload`);

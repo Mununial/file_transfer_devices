@@ -161,12 +161,16 @@ app.post('/upload', upload.single('file'), (req, res) => {
     const fileId = uuidv4();
     const expiresAt = Date.now() + FILE_EXPIRY_MS;
 
+    const password = req.body.password;
+    const hashedPassword = password ? bcrypt.hashSync(password, 8) : null;
+
     uploadedFiles.set(fileId, {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         filePath: req.file.path,
         size: req.file.size,
-        expiresAt
+        expiresAt,
+        password: hashedPassword
     });
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
@@ -201,6 +205,42 @@ app.get('/download/:id', (req, res) => {
     if (!fs.existsSync(meta.filePath)) {
         uploadedFiles.delete(fileId);
         return res.status(404).send('File not found.');
+    }
+
+    // Password Challenge
+    if (meta.password) {
+        const providedPassword = req.query.p || req.body.password;
+        if (!providedPassword || !bcrypt.compareSync(providedPassword, meta.password)) {
+            // Serve a simple, themed password prompt page
+            return res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>GATEKEEPER - AUTH_REQUIRED</title>
+                    <style>
+                        body { background: #050505; color: #FF3131; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                        .box { border: 2px solid #FF3131; padding: 2rem; box-shadow: 0 0 20px rgba(255, 49, 49, 0.4); text-align: center; }
+                        input { background: rgba(255, 49, 49, 0.1); border: 1px solid #FF3131; color: #39FF14; padding: 10px; margin: 10px 0; outline: none; width: 200px; text-align: center; }
+                        button { background: #FF3131; color: #000; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; }
+                        button:hover { background: #39FF14; }
+                        h2 { letter-spacing: 2px; }
+                        .error { color: #FF3131; font-size: 0.8rem; margin-top: 10px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="box">
+                        <h2>ACCESS_DENIED</h2>
+                        <p>THIS_INTEL_IS_ENCRYPTED</p>
+                        <form method="GET">
+                            <input type="password" name="p" placeholder="ENTER_CLEARANCE_CODE" autofocus><br>
+                            <button type="submit">AUTHORIZE</button>
+                        </form>
+                        ${providedPassword ? '<p class="error">INVALID_CLEARANCE_CODE</p>' : ''}
+                    </div>
+                </body>
+                </html>
+            `);
+        }
     }
 
     res.download(meta.filePath, meta.originalName);
