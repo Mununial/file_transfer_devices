@@ -92,8 +92,15 @@ function setupDashboardNav() {
             const target = item.getAttribute('data-target');
             const id = item.id;
 
-            // Handle "Send" action across different buttons
-            if (id === 'btn-nav-send' || id === 'btn-manual-transfer') {
+            // Handle Actions
+            if (id === 'btn-manual-transfer') {
+                showToast('ACCESSING CLOUD_BRIDGE FOR LINK GENERATION...', 'info');
+                const sInput = document.getElementById('shareFileInput');
+                if (sInput) sInput.click();
+                return;
+            }
+
+            if (id === 'btn-nav-send') {
                 handleSendAction();
                 return;
             }
