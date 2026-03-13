@@ -93,8 +93,8 @@ function setupDashboardNav() {
             const id = item.id;
 
             // Handle Actions
-            if (id === 'btn-manual-transfer') {
-                showToast('ACCESSING CLOUD_BRIDGE FOR LINK GENERATION...', 'info');
+            if (id === 'btn-manual-transfer' || id === 'btn-manual-transfer-mobile') {
+                showToast('INITIALIZING CLOUD_BRIDGE: PREPARING SECURE LINK...', 'info');
                 const sInput = document.getElementById('shareFileInput');
                 if (sInput) sInput.click();
                 return;
