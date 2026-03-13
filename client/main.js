@@ -138,6 +138,7 @@ let receivedChunks = [];
 let receivedSize = 0;
 let currentTransferTarget = null;
 let encryptionKey = null; // Void-Proof Shielding
+let transferStartTime = null;
 
 // ---------------------------
 // Audio System
@@ -835,55 +836,29 @@ async function handleIncomingFileRequest(msg, senderId) {
             const agentName = sender.agentId ? `AGENT_${sender.agentId.toUpperCase()}` : sender.name;
             mContent.innerHTML = `
                 <div class="sender-ident" style="font-size: 0.8rem; color: var(--accent-primary); margin-bottom: 1rem; text-align: center;">
-                    [ORIGIN_AGENT: ${agentName}]
+                    [RECEIVING FROM: ${agentName}]
                 </div>
                 <div class="file-info">
                     <i class="ri-folder-shield-2-line"></i>
                     <div class="file-details">
                         <span class="file-name">${msg.name}</span>
                         <span class="file-size">${(msg.size / (1024*1024)).toFixed(2)} MB</span>
-                        <span style="color: var(--accent-primary); font-size: 0.7rem; margin-top: 5px;">[VOID-PROOF SHIELDING ACTIVE]</span>
+                        <span id="transferRate" style="color: var(--text-main); font-size: 0.7rem; margin-top: 5px;">[STABILIZING TUNNEL...]</span>
                     </div>
                 </div>
-                <div class="progress-container hidden" id="receiveProgressContainer">
+                <div class="progress-container" id="receiveProgressContainer">
                     <div class="progress-bar" id="receiveProgressBar"></div>
-                    <span class="progress-label" id="progressLabel">ENCRYPTION STRENGTH: 0%</span>
+                    <span class="progress-label" id="progressLabel">CONNECTING...</span>
                 </div>
             `;
         }
 
-        if (mActions) {
-            mActions.innerHTML = `
-                <button class="btn btn-secondary" id="btnReject">ABORT</button>
-                <button class="btn btn-primary" id="btnAccept">INITIATE TRANSFER</button>
-            `;
-        }
-
+        if (mActions) mActions.innerHTML = ''; // Auto-accepting, no buttons needed
         if (mOverlay) mOverlay.classList.remove('hidden');
-
-        const btnReject = getEl('btnReject');
-        const btnAccept = getEl('btnAccept');
-
-        if (btnReject) {
-            btnReject.onclick = () => {
-                sender.dataChannel.send(JSON.stringify({ type: 'transfer-rejected' }));
-                if (mOverlay) mOverlay.classList.add('hidden');
-                incomingFile = null;
-            };
-        }
-
-        if (btnAccept) {
-            btnAccept.onclick = () => {
-                const rejectBtn = getEl('btnReject');
-                const acceptBtn = getEl('btnAccept');
-                if (rejectBtn) rejectBtn.style.display = 'none';
-                if (acceptBtn) acceptBtn.style.display = 'none';
-                const progContainer = getEl('receiveProgressContainer');
-                if (progContainer) progContainer.classList.remove('hidden');
-                startHum();
-                sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
-            };
-        }
+        
+        startHum();
+        sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
+        transferStartTime = Date.now();
     } catch (err) {
         console.error('TRANSFER_INIT_FAILED:', err);
         showToast('SIGNAL_BREACH: FAILED TO OPEN TUNNEL', 'error');
@@ -898,8 +873,16 @@ function receiveChunk(data) {
     const progress = Math.min(100, (receivedSize / incomingFile.size) * 100);
     const bar = document.getElementById('receiveProgressBar');
     const label = document.getElementById('progressLabel');
+    const rateEl = document.getElementById('transferRate');
+    
     if (bar) bar.style.width = `${progress}%`;
-    if (label) label.textContent = `SIGNAL STABILITY: ${progress.toFixed(0)}%`;
+    if (label) label.textContent = `SYNCING: ${progress.toFixed(1)}%`;
+    
+    if (rateEl && transferStartTime) {
+        const elapsed = (Date.now() - transferStartTime) / 1000;
+        const speed = (receivedSize / (1024 * 1024)) / elapsed; // MB/s
+        rateEl.textContent = `[SPEED: ${speed.toFixed(2)} MB/S]`;
+    }
 }
 
 function finishReceivingFile(senderId) {
