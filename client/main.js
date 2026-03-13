@@ -52,7 +52,7 @@ function initApp() {
     if (!window.isSecureContext && !isLocal) {
         showToast("SECURITY_BLOCK: HTTPS REQUIRED FOR P2P", "error");
         setTimeout(() => {
-            alert("SECURE_CONTEXT_REQUIRED: Mobile/Laptop transfer NEEDS HTTPS to function. Please use the secured Render deployment link.");
+            alert("SECURE_CONTEXT_REQUIRED: For laptop-to-laptop transfer on local network, use HTTPS or enable 'Insecure origins treated as secure' in chrome://flags for this IP.");
         }, 1000);
     }
 
@@ -141,6 +141,18 @@ function setupDashboardNav() {
             }
         };
     }
+
+    const toggleCompress = document.getElementById('toggle-compress');
+    if (toggleCompress) {
+        toggleCompress.onchange = (e) => {
+            playClick();
+            if (e.target.checked) {
+                showToast('COMPRESSION_PROTOCOL: ACTIVE', 'success');
+            } else {
+                showToast('COMPRESSION_PROTOCOL: STANDBY', 'info');
+            }
+        };
+    }
 }
 
 // Consolidated Send Action: Decides between P2P and Cloud
@@ -190,9 +202,10 @@ const rtcConfig = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' }
+        { urls: 'stun:stun.services.mozilla.com' },
+        { urls: 'stun:stun.relay.metered.ca:443' } // Added an extra reliable stun
     ],
-    iceCandidatePoolSize: 20,
+    iceCandidatePoolSize: 10,
     iceTransportPolicy: 'all',
     bundlePolicy: 'max-bundle'
 };
@@ -552,9 +565,17 @@ function connectSignaling() {
                 }
 
                 // AUTO-WARM: Initiate WebRTC Bridge immediately for smooth transfer
+                // To avoid "glare" (both sides trying to offer), only one side initiates.
+                // We use a simple rule: the peer with the lexicographically smaller ID initiates.
+                // OR if it's a join-by-code/QR, we could have a specific flag.
                 setTimeout(() => {
-                    console.log(`[AUTO_WARM] Pairing with ${msg.peer.id}`);
-                    startConnection(msg.peer.id);
+                    const isInitiator = myId < msg.peer.id;
+                    if (isInitiator) {
+                        console.log(`[AUTO_WARM] We are initiator. Pairing with ${msg.peer.id}`);
+                        startConnection(msg.peer.id);
+                    } else {
+                        console.log(`[AUTO_WARM] Waiting for offer from ${msg.peer.id}`);
+                    }
                 }, 1000);
                 break;
             case 'passcode-ready':
@@ -719,20 +740,24 @@ function getOrCreateConnection(peerId) {
             console.log(`[CONN_STATE] ${pc.connectionState} for ${peer.name}`);
             if (pc.connectionState === 'connected') {
                 showToast(`SECURE BRIDGE STABILIZED WITH ${peer.name.toUpperCase()}`, 'success');
-            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                showToast(`SIGNAL_DROPPED WITH ${peer.name.toUpperCase()}. RECONNECTING...`, 'error');
+            } else if (pc.connectionState === 'failed') {
+                showToast(`SIGNAL_FAILED WITH ${peer.name.toUpperCase()}. ATTEMPTING_RECOVERY...`, 'error');
+            } else if (pc.connectionState === 'disconnected') {
+                showToast(`SIGNAL_DROPPED WITH ${peer.name.toUpperCase()}.`, 'info');
             }
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log(`[ICE_STATE] ${pc.iceConnectionState}`);
+            console.log(`[ICE_STATE] ${pc.iceConnectionState} for ${peer.name}`);
             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                console.warn('ICE Failed, attempting aggressive recovery...');
+                console.warn('[ICE_RECOVERY] Attempting aggressive restart...');
                 pc.restartIce();
-                // If we are the initiator, re-spark the offer
+                // If we are the primary node for this connection, re-offer if stale
                 setTimeout(() => {
-                    if (pc.signalingState === 'stable') startConnection(peerId);
-                }, 2000);
+                    if (pc.signalingState === 'stable' && pc.iceConnectionState !== 'connected') {
+                        if (myId < peerId) startConnection(peerId);
+                    }
+                }, 3000);
             }
         };
 
@@ -879,8 +904,11 @@ fileInput.addEventListener('change', async (e) => {
     const peer = peers.get(currentTransferTarget);
     if (!peer) return;
 
-    // Add all files to the mission queue
-    peer.fileQueue.push(...files);
+    // Add all files to the mission queue (with optional compression)
+    for (const file of files) {
+        const processedFile = await maybeCompressFile(file);
+        peer.fileQueue.push(processedFile);
+    }
 
     if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
         // Only start if we aren't already transferring
@@ -1162,6 +1190,90 @@ window.downloadFromVault = (index) => {
     showToast(`RE-CONFIGURING CLASSIFIED INTEL...`, 'info');
 };
 
+// ---------------------------
+// Compression Protocol
+// ---------------------------
+
+async function maybeCompressFile(file) {
+    const shouldCompress = document.getElementById('toggle-compress')?.checked;
+    if (!shouldCompress) return file;
+
+    // Only compress if it's an image and reasonably large (> 1MB)
+    if (file.type.startsWith('image/') && file.size > 1024 * 1024) {
+        showToast(`COMPRESSING INTEL: ${file.name.toUpperCase()}...`, 'info');
+        try {
+            const compressed = await compressImage(file);
+            const saved = ((file.size - compressed.size) / (1024 * 1024)).toFixed(2);
+            showToast(`COMPRESSION_COMPLETE: SAVED ${saved} MB`, 'success');
+            return compressed;
+        } catch (e) {
+            console.error('COMPRESSION_ERR', e);
+            return file;
+        }
+    }
+    
+    // Video compression is complex in-browser without FFmpeg.wasm, 
+    // we notify user that only images are optimized currently.
+    if (file.type.startsWith('video/') && file.size > 10 * 1024 * 1024) {
+        showToast('VIDEO_COMPRESSION_UNAVAILABLE: SENDING RAW DATA.', 'info');
+    }
+
+    return file;
+}
+
+async function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Max dimensions for "compressed" view
+                const MAX_WIDTH = 1920;
+                const MAX_HEIGHT = 1080;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('Canvas toBlob failed'));
+                        return;
+                    }
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    
+                    // Only return compressed if it's actually smaller
+                    resolve(compressedFile.size < file.size ? compressedFile : file);
+                }, 'image/jpeg', 0.82); // High-quality but efficient compression
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+}
+
 function sendSignaling(data) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(data));
@@ -1185,9 +1297,11 @@ if (initTransferBtn) {
 
 if (shareFileInput) {
     shareFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const rawFile = e.target.files[0];
+        if (!rawFile) return;
         shareFileInput.value = '';
+
+        const file = await maybeCompressFile(rawFile);
 
         if (modalTitle) modalTitle.textContent = 'ESTABLISHING SECURE BRIDGE...';
         if (modalContent) {

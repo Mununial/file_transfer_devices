@@ -108,6 +108,13 @@
                     <button class="nav-item" id="btn-manual-transfer"><i class="ri-upload-2-line"></i> CLOUD_BRIDGE</button>
                 </nav>
                 <div class="sidebar-status">
+                    <div class="preferences">
+                        <span class="label-text">COMPRESS_INTEL:</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-compress">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                     <div class="status">
                         <div class="status-indicator offline" id="connectionStatusIndicator"></div>
                         <span id="connectionStatusText">SIGNAL_IDLE</span>
@@ -131,6 +138,7 @@
                     </div>
 
                     <div class="view-label">SCANNING_FOR_PROXIMITY_SIGNALS...</div>
+                    <div class="radar-hint">[ HINT: IF NODE NOT FOUND, USE SECURE_HANDSHAKE CODE ]</div>
                 </div>
 
                 <!-- Secure Vault View -->
