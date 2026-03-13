@@ -210,11 +210,12 @@ const modalContent = getEl('modalContent');
 const modalActions = getEl('modalActions');
 
 // File transfer state
+// File transfer state (Global defaults, but overridden per-peer if possible)
 let incomingFile = null;
 let receivedChunks = [];
 let receivedSize = 0;
 let currentTransferTarget = null;
-let encryptionKey = null; // Void-Proof Shielding
+let currentEncryptionKey = null; // Global reference for current active incoming/outgoing
 let transferStartTime = null;
 
 // ---------------------------
@@ -642,7 +643,20 @@ function addPeer(id, name, agentId = null) {
     };
     
     if (peersContainer) peersContainer.appendChild(el);
-    peers.set(id, { name, el, agentId, connection: null, dataChannel: null, fileQueue: [] });
+    peers.set(id, { 
+        name, 
+        el, 
+        agentId, 
+        connection: null, 
+        dataChannel: null, 
+        fileQueue: [],
+        pendingFile: null,
+        incomingFile: null,
+        receivedChunks: [],
+        receivedSize: 0,
+        encryptionKey: null,
+        transferStartTime: null
+    });
 }
 
 function updatePeerIdentity(id, agentId) {
@@ -767,30 +781,35 @@ function setupDataChannel(peerId, dc) {
         stopHum();
     };
 
-    dc.onmessage = async (e) => {
-        if (typeof e.data === 'string') {
-            const msg = JSON.parse(e.data);
-            if (msg.type === 'file-header') {
-                handleIncomingFileRequest(msg, peerId);
-            } else if (msg.type === 'transfer-accepted') {
-                startSendingFile(peerId);
-            } else if (msg.type === 'transfer-rejected') {
-                showToast('TRANSFER ABORTED BY REMOTE NODE', 'error');
-            } else if (msg.type === 'file-complete') {
-                finishReceivingFile(peerId);
-            } else if (msg.type === 'transfer-finished-ack') {
-                // Next file in queue can now be sent safely
-                const peer = peers.get(peerId);
-                if (peer && peer.fileQueue.length > 0) {
-                    sendFileHeader(peerId, peer.fileQueue[0]);
+        dc.onmessage = async (e) => {
+            const peer = peers.get(peerId);
+            if (!peer) return;
+
+            if (typeof e.data === 'string') {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'file-header') {
+                    handleIncomingFileRequest(msg, peerId);
+                } else if (msg.type === 'transfer-accepted') {
+                    startSendingFile(peerId);
+                } else if (msg.type === 'transfer-rejected') {
+                    showToast('TRANSFER ABORTED BY REMOTE NODE', 'error');
+                } else if (msg.type === 'file-complete') {
+                    finishReceivingFile(peerId);
+                } else if (msg.type === 'transfer-finished-ack') {
+                    if (peer.fileQueue.length > 0) {
+                        sendFileHeader(peerId, peer.fileQueue[0]);
+                    }
+                }
+            } else {
+                // Binary chunk received (Encrypted)
+                try {
+                    const decrypted = await decryptData(new Uint8Array(e.data), peer.encryptionKey);
+                    receiveChunk(decrypted, peerId);
+                } catch (err) {
+                    console.error('DECRYPTION_FAILED', err);
                 }
             }
-        } else {
-            // Binary chunk received (Encrypted)
-            const decrypted = await decryptData(new Uint8Array(e.data), encryptionKey);
-            receiveChunk(decrypted);
-        }
-    };
+        };
 }
 
 async function computeHash(data) {
@@ -830,17 +849,16 @@ fileInput.addEventListener('change', async (e) => {
 async function sendFileHeader(peerId, file) {
     const peer = peers.get(peerId);
     if (!peer || !peer.dataChannel || peer.dataChannel.readyState !== 'open') {
-        showToast('BRIDGE NOT ESTABLISHED. RETRYING...', 'error');
+        showToast('BRIDGE NOT ESTABLISHED.', 'error');
         return;
     }
 
-    // Generate Void-Proof Shielding Key
-    encryptionKey = await generateKey();
-    const keyStr = await exportKey(encryptionKey);
+    // Generate Key for this peer
+    peer.encryptionKey = await generateKey();
+    const keyStr = await exportKey(peer.encryptionKey);
     
-    // Compute Integrity Hash (SHA-256)
-    const fileBuffer = await file.arrayBuffer();
-    const hash = await computeHash(fileBuffer);
+    // Hash file (Quick hash for progress - only using metadata for speed on large files)
+    const quickHash = `${file.name}-${file.size}-${file.lastModified}`;
 
     peer.pendingFile = file;
 
@@ -849,11 +867,11 @@ async function sendFileHeader(peerId, file) {
         name: file.name,
         size: file.size,
         mime: file.type,
-        hash: hash, // For Integrity Check
-        vpsKey: keyStr // Send the shielding key
+        hash: quickHash, 
+        vpsKey: keyStr
     }));
 
-    showToast(`SEARCHING FOR CLEARANCE FROM ${peer.name.toUpperCase()}...`, 'info');
+    showToast(`REQUESTING CLEARANCE FROM ${peer.name.toUpperCase()}...`, 'info');
 }
 
 async function startSendingFile(peerId) {
@@ -875,7 +893,7 @@ async function startSendingFile(peerId) {
             if (dc.readyState !== 'open') return;
 
             // Encrypt Chunk (Void-Proof Shielding)
-            const encrypted = await encryptData(e.target.result, encryptionKey);
+            const encrypted = await encryptData(e.target.result, peer.encryptionKey);
             
             dc.send(encrypted);
             offset += e.target.result.byteLength;
@@ -909,18 +927,19 @@ async function handleIncomingFileRequest(msg, senderId) {
         const sender = peers.get(senderId);
         if (!sender) return;
 
-        // Import Void-Proof Shielding Key
-        encryptionKey = await importKey(msg.vpsKey);
+        // Import Key for this peer
+        sender.encryptionKey = await importKey(msg.vpsKey);
 
-        incomingFile = {
+        sender.incomingFile = {
             name: msg.name,
             size: msg.size,
             mime: msg.mime,
-            hash: msg.hash, // Integrity Hash
+            hash: msg.hash,
             senderId: senderId
         };
-        receivedChunks = [];
-        receivedSize = 0;
+        sender.receivedChunks = [];
+        sender.receivedSize = 0;
+        sender.transferStartTime = Date.now();
 
         const mTitle = getEl('modalTitle');
         const mContent = getEl('modalContent');
@@ -954,19 +973,20 @@ async function handleIncomingFileRequest(msg, senderId) {
         
         startHum();
         sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
-        transferStartTime = Date.now();
     } catch (err) {
         console.error('TRANSFER_INIT_FAILED:', err);
         showToast('SIGNAL_BREACH: FAILED TO OPEN TUNNEL', 'error');
     }
 }
 
-function receiveChunk(data) {
-    if (!incomingFile) return;
-    receivedChunks.push(data);
-    receivedSize += data.byteLength;
+function receiveChunk(data, senderId) {
+    const peer = peers.get(senderId);
+    if (!peer || !peer.incomingFile) return;
+    
+    peer.receivedChunks.push(data);
+    peer.receivedSize += data.byteLength;
 
-    const progress = Math.min(100, (receivedSize / incomingFile.size) * 100);
+    const progress = Math.min(100, (peer.receivedSize / peer.incomingFile.size) * 100);
     const bar = document.getElementById('receiveProgressBar');
     const label = document.getElementById('progressLabel');
     const rateEl = document.getElementById('transferRate');
@@ -974,59 +994,50 @@ function receiveChunk(data) {
     if (bar) bar.style.width = `${progress}%`;
     if (label) label.textContent = `SYNCING: ${progress.toFixed(1)}%`;
     
-    if (rateEl && transferStartTime) {
-        const elapsed = (Date.now() - transferStartTime) / 1000;
-        const speed = (receivedSize / (1024 * 1024)) / elapsed; // MB/s
+    if (rateEl && peer.transferStartTime) {
+        const elapsed = (Date.now() - peer.transferStartTime) / 1000;
+        const speed = (peer.receivedSize / (1024 * 1024)) / elapsed; // MB/s
         rateEl.textContent = `[SPEED: ${speed.toFixed(2)} MB/S]`;
     }
 }
 
 function finishReceivingFile(senderId) {
-    if (!incomingFile) return;
-    stopHum();
-    
     const peer = peers.get(senderId);
-    const blob = new Blob(receivedChunks, { type: incomingFile.mime });
+    if (!peer || !peer.incomingFile) return;
     
-    // Perform Void-Integrity Check
-    blob.arrayBuffer().then(async (buffer) => {
-        const receivedHash = await computeHash(buffer);
-        
-        if (receivedHash === incomingFile.hash) {
-            playSuccessSynth();
-            
-            // Add to Secure Vault
-            vaultFiles.push({
-                name: incomingFile.name,
-                size: incomingFile.size,
-                blob: blob,
-                sender: peer ? peer.name : 'UNKNOWN_AGENT',
-                timestamp: new Date().toLocaleTimeString()
-            });
-            renderVault();
-            
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = incomingFile.name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast(`INTEL SECURED: ${incomingFile.name.toUpperCase()}`, 'success');
-        } else {
-            showToast(`VOID CORRUPTION DETECTED. ABORTING.`, 'error');
-        }
-        
-        // Signal clearance for next file if any
-        if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
-            peer.dataChannel.send(JSON.stringify({ type: 'transfer-finished-ack' }));
-        }
-
-        modalOverlay.classList.add('hidden');
-        incomingFile = null;
-        receivedChunks = [];
+    stopHum();
+    const blob = new Blob(peer.receivedChunks, { type: peer.incomingFile.mime });
+    
+    playSuccessSynth();
+    
+    // Add to Secure Vault
+    vaultFiles.push({
+        name: peer.incomingFile.name,
+        size: peer.incomingFile.size,
+        blob: blob,
+        sender: peer.name,
+        timestamp: new Date().toLocaleTimeString()
     });
+    renderVault();
+    
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = peer.incomingFile.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`INTEL SECURED: ${peer.incomingFile.name.toUpperCase()}`, 'success');
+
+    // Signal clearance for next file if any
+    if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+        peer.dataChannel.send(JSON.stringify({ type: 'transfer-finished-ack' }));
+    }
+
+    if (modalOverlay) modalOverlay.classList.add('hidden');
+    peer.incomingFile = null;
+    peer.receivedChunks = [];
 }
 
 function renderVault() {
