@@ -182,9 +182,11 @@ const rtcConfig = {
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:stun.services.mozilla.com' }
     ],
-    iceCandidatePoolSize: 10
+    iceCandidatePoolSize: 10,
+    iceTransportPolicy: 'all'
 };
 
 // UI Elements
@@ -684,22 +686,33 @@ function getOrCreateConnection(peerId) {
 
         pc.onicecandidate = (e) => {
             if (e.candidate) {
+                console.log(`[ICE_SENT] Candidate found for ${peerId}`);
                 sendSignaling({ type: 'candidate', target: peerId, candidate: e.candidate });
             }
         };
 
-        pc.ondatachannel = (e) => {
-            const dc = e.channel;
-            setupDataChannel(peerId, dc);
-            peer.dataChannel = dc;
+        pc.onconnectionstatechange = () => {
+            console.log(`[CONN_STATE] ${pc.connectionState} for ${peer.name}`);
+            if (pc.connectionState === 'connected') {
+                showToast(`SECURE BRIDGE STABILIZED WITH ${peer.name.toUpperCase()}`, 'success');
+            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                showToast(`SIGNAL_DROPPED WITH ${peer.name.toUpperCase()}. RECONNECTING...`, 'error');
+            }
         };
 
         pc.oniceconnectionstatechange = () => {
             console.log(`[ICE_STATE] ${pc.iceConnectionState}`);
             if (pc.iceConnectionState === 'failed') {
+                console.warn('ICE Failed, restarting...');
                 pc.restartIce();
-                showToast('RE-STABILIZING_SIGNAL...', 'warning');
             }
+        };
+
+        pc.ondatachannel = (e) => {
+            const dc = e.channel;
+            console.log(`[DC_RECEIVED] Channel incoming from ${peerId}`);
+            setupDataChannel(peerId, dc);
+            peer.dataChannel = dc;
         };
 
         peer.connection = pc;
@@ -962,11 +975,29 @@ async function handleIncomingFileRequest(msg, senderId) {
             `;
         }
 
-        if (mActions) mActions.innerHTML = ''; // Auto-accepting, no buttons needed
+        if (mActions) {
+            mActions.innerHTML = `
+                <button id="btn-reject-transfer" class="btn btn-secondary">REJECT</button>
+                <button id="btn-accept-transfer" class="btn btn-primary">ACCEPT</button>
+            `;
+
+            document.getElementById('btn-reject-transfer').onclick = () => {
+                sender.dataChannel.send(JSON.stringify({ type: 'transfer-rejected' }));
+                if (mOverlay) mOverlay.classList.add('hidden');
+                stopHum();
+                showToast('TRANSFER_REJECTED', 'error');
+            };
+
+            document.getElementById('btn-accept-transfer').onclick = () => {
+                mActions.innerHTML = ''; // Hide buttons during transfer
+                startHum();
+                sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
+                sender.transferStartTime = Date.now();
+                showToast('ESTABLISHING_TUNNEL...', 'info');
+            };
+        }
+
         if (mOverlay) mOverlay.classList.remove('hidden');
-        
-        startHum();
-        sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
     } catch (err) {
         console.error('TRANSFER_INIT_FAILED:', err);
         showToast('SIGNAL_BREACH: FAILED TO OPEN TUNNEL', 'error');
