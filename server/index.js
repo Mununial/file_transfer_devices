@@ -175,11 +175,11 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.get('host');
-    const downloadUrl = `${protocol}://${host}/download/${fileId}`;
+    const shareUrl = `${protocol}://${host}/?dl=${fileId}`;
 
     res.json({
         id: fileId,
-        url: downloadUrl,
+        url: shareUrl,
         name: req.file.originalname,
         size: req.file.size,
         expiresIn: '24 hours'

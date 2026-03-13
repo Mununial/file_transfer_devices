@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     autoConnectTarget = params.get('target');
     
+    const dlTarget = params.get('dl');
+    if (dlTarget) {
+        showDownloadAuthModal(dlTarget);
+    }
+
     initApp();
     
     // Hide Splash Screen after timeout
@@ -681,12 +686,13 @@ function addPeer(id, name, agentId = null) {
         startConnection(id);
     };
 
-    el.onclick = (e) => { 
+    el.onclick = async (e) => { 
         e.stopPropagation();
         currentTransferTarget = id; 
         const agentName = agentId ? `AGENT_${agentId.toUpperCase()}` : name;
-        showToast(`ESTABLISHING BRIDGE WITH ${agentName}...`, 'info');
-        if (fileInput) fileInput.click(); 
+        
+        // Ask for optional P2P password
+        promptP2PPassword(id, agentName);
     };
     
     if (peersContainer) peersContainer.appendChild(el);
@@ -911,14 +917,19 @@ fileInput.addEventListener('change', async (e) => {
     const peer = peers.get(currentTransferTarget);
     if (!peer) return;
 
+    // Password was set by promptP2PPassword
+    const password = peer.transferPassword || null;
+    const passwordHash = password ? await computeHash(new TextEncoder().encode(password)) : null;
+
     // Add all files to the mission queue (with optional compression)
     for (const file of files) {
         const processedFile = await maybeCompressFile(file);
+        // Attach the hash to the file object for the header
+        processedFile.authHash = passwordHash;
         peer.fileQueue.push(processedFile);
     }
 
     if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
-        // Only start if we aren't already transferring
         if (!peer.pendingFile) {
             sendFileHeader(currentTransferTarget, peer.fileQueue[0]);
         } else {
@@ -933,6 +944,40 @@ fileInput.addEventListener('change', async (e) => {
 
     fileInput.value = ''; 
 });
+
+function promptP2PPassword(peerId, agentName) {
+    if (modalTitle) modalTitle.textContent = 'SECURE BRIDGE PROTOCOL';
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <div style="width: 100%; text-align: center;">
+                <p style="font-size: 0.8rem; color: var(--text-main);">ESTABLISHING ENCRYPTED TUNNEL TO: ${agentName}</p>
+                <div class="field-row" style="margin: 1.5rem 0;">
+                    <label>ACCESS_CODE (OPTIONAL):</label>
+                    <input type="password" id="p2p-password" class="terminal-input" placeholder="ENTER TO PROTECT OR LEAVE BLANK">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-cancel-p2p" class="btn btn-secondary" style="flex: 1;">ABORT</button>
+                    <button id="btn-proceed-p2p" class="btn btn-primary" style="flex: 2;">PROCEED</button>
+                </div>
+            </div>
+        `;
+    }
+    if (modalActions) modalActions.innerHTML = '';
+    if (modalOverlay) modalOverlay.classList.remove('hidden');
+
+    document.getElementById('btn-cancel-p2p').onclick = () => {
+        if (modalOverlay) modalOverlay.classList.add('hidden');
+    };
+
+    document.getElementById('btn-proceed-p2p').onclick = () => {
+        const peer = peers.get(peerId);
+        if (peer) {
+            peer.transferPassword = document.getElementById('p2p-password').value;
+        }
+        if (modalOverlay) modalOverlay.classList.add('hidden');
+        if (fileInput) fileInput.click();
+    };
+}
 
 async function sendFileHeader(peerId, file) {
     const peer = peers.get(peerId);
@@ -956,6 +1001,7 @@ async function sendFileHeader(peerId, file) {
         size: file.size,
         mime: file.type,
         hash: quickHash, 
+        authHash: file.authHash || null,
         vpsKey: keyStr
     }));
 
@@ -1069,12 +1115,13 @@ async function handleIncomingFileRequest(msg, senderId) {
                 showToast('TRANSFER_REJECTED', 'error');
             };
 
-            document.getElementById('btn-accept-transfer').onclick = () => {
-                mActions.innerHTML = ''; // Hide buttons during transfer
-                startHum();
-                sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
-                sender.transferStartTime = Date.now();
-                showToast('ESTABLISHING_TUNNEL...', 'info');
+            document.getElementById('btn-accept-transfer').onclick = async () => {
+                // If the file is protected, ask for password
+                if (msg.authHash) {
+                    showP2PPasswordChallenge(senderId, msg.authHash);
+                } else {
+                    startP2PTransfer(senderId);
+                }
             };
         }
 
@@ -1083,6 +1130,78 @@ async function handleIncomingFileRequest(msg, senderId) {
         console.error('TRANSFER_INIT_FAILED:', err);
         showToast('SIGNAL_BREACH: FAILED TO OPEN TUNNEL', 'error');
     }
+}
+
+function showP2PPasswordChallenge(senderId, authHash) {
+    if (modalTitle) modalTitle.textContent = 'ACCESS_CODE_REQUIRED';
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <div style="width: 100%; text-align: center;">
+                <p style="font-size: 0.8rem; color: var(--accent-primary);">THIS INTEL IS PROTECTED BY A CLEARANCE CODE.</p>
+                <div class="field-row" style="margin: 1.5rem 0;">
+                    <label>ENTER_CLEARANCE_CODE:</label>
+                    <input type="password" id="p2p-challenge-pass" class="terminal-input" placeholder="...">
+                    <p id="p2p-auth-error" class="hidden" style="color: var(--accent-primary); font-size: 0.7rem; margin-top: 5px;">[INVALID_CODE_TRY_AGAIN]</p>
+                </div>
+                <button id="btn-verify-p2p" class="btn btn-primary" style="width: 100%;">VERIFY_CLEARANCE</button>
+            </div>
+        `;
+    }
+
+    document.getElementById('btn-verify-p2p').onclick = async () => {
+        const input = document.getElementById('p2p-challenge-pass').value;
+        const inputHash = await computeHash(new TextEncoder().encode(input));
+        
+        if (inputHash === authHash) {
+            startP2PTransfer(senderId);
+        } else {
+            const err = document.getElementById('p2p-auth-error');
+            if (err) err.classList.remove('hidden');
+            playClick();
+        }
+    };
+}
+
+function startP2PTransfer(senderId) {
+    const sender = peers.get(senderId);
+    const mActions = getEl('modalActions');
+    if (mActions) mActions.innerHTML = '';
+    
+    startHum();
+    sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
+    sender.transferStartTime = Date.now();
+    showToast('ESTABLISHING_TUNNEL...', 'info');
+}
+
+function showDownloadAuthModal(fileId) {
+    if (modalTitle) modalTitle.textContent = 'REMOTE_DOWNLOAD_CONFIG';
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <div style="width: 100%; text-align: center;">
+                <p style="font-size: 0.8rem; color: var(--text-main);">ACCESSING REMOTE INTEL: NODE_${fileId.substring(0,4)}</p>
+                <div class="field-row" style="margin: 1.5rem 0;">
+                    <label>ACCESS_CODE (IF PROTECTED):</label>
+                    <input type="password" id="dl-password" class="terminal-input" placeholder="LEAVE BLANK IF NO PASSWORD">
+                </div>
+                <button id="btn-start-dl" class="btn btn-primary" style="width: 100%;">START_DOWNLOAD</button>
+            </div>
+        `;
+    }
+    if (modalActions) modalActions.innerHTML = '';
+    if (modalOverlay) modalOverlay.classList.remove('hidden');
+
+    document.getElementById('btn-start-dl').onclick = () => {
+        const password = document.getElementById('dl-password').value;
+        window.location.href = `${API_URL}/download/${fileId}?p=${encodeURIComponent(password)}`;
+        
+        // Minor delay to let the download start before hiding modal
+        setTimeout(() => {
+            if (modalOverlay) modalOverlay.classList.add('hidden');
+            // Remove the URL param to clean up
+            const newUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }, 3000);
+    };
 }
 
 function receiveChunk(data, senderId) {
