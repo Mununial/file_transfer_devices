@@ -94,7 +94,7 @@ function setupDashboardNav() {
 
             // Handle Actions
             if (id === 'btn-manual-transfer' || id === 'btn-manual-transfer-mobile') {
-                showToast('INITIALIZING CLOUD_BRIDGE: PREPARING SECURE LINK...', 'info');
+                showToast('INITIALIZING_LINK: PREPARING SECURE TUNNELS...', 'info');
                 const sInput = document.getElementById('shareFileInput');
                 if (sInput) sInput.click();
                 return;
@@ -1304,118 +1304,128 @@ if (initTransferBtn) {
 
 if (shareFileInput) {
     shareFileInput.addEventListener('change', async (e) => {
-        const rawFile = e.target.files[0];
-        if (!rawFile) return;
+        const rawFiles = Array.from(e.target.files);
+        if (rawFiles.length === 0) return;
         shareFileInput.value = '';
 
-        const file = await maybeCompressFile(rawFile);
-
-        if (modalTitle) modalTitle.textContent = 'ESTABLISHING SECURE BRIDGE...';
+        if (modalTitle) modalTitle.textContent = 'INITIALIZING SECURE LINKS...';
         if (modalContent) {
             modalContent.innerHTML = `
-                <div class="file-info">
-                    <i class="ri-upload-cloud-2-line"></i>
-                    <div class="file-details">
-                        <span class="file-name">${file.name}</span>
-                        <span class="file-size">${(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-                    </div>
+                <div id="multi-upload-container" style="max-height: 300px; overflow-y: auto; width: 100%;">
+                    <p class="upload-status" id="uploadStatus">PREPARING ${rawFiles.length} FILES...</p>
+                    <div id="upload-list"></div>
                 </div>
-                <div class="progress-container" id="uploadProgressContainer">
-                    <div class="progress-bar" id="uploadProgressBar"></div>
-                </div>
-                <p class="upload-status" id="uploadStatus">TUNNELING DATA...</p>
             `;
         }
         if (modalActions) modalActions.innerHTML = '';
         if (modalOverlay) modalOverlay.classList.remove('hidden');
-        startHum();
 
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
+        const results = [];
+        const uploadList = document.getElementById('upload-list');
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `${API_URL}/upload`);
+        for (let i = 0; i < rawFiles.length; i++) {
+            const rawFile = rawFiles[i];
+            const file = await maybeCompressFile(rawFile);
+            
+            const fileRow = document.createElement('div');
+            fileRow.className = 'file-info-row';
+            fileRow.style.marginBottom = '10px';
+            fileRow.innerHTML = `
+                <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+                    <span>${file.name}</span>
+                    <span id="p-${i}">WAITING...</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="bar-${i}" style="width: 0%"></div>
+                </div>
+            `;
+            if (uploadList) uploadList.appendChild(fileRow);
 
-            xhr.upload.onprogress = (evt) => {
-                if (evt.lengthComputable) {
-                    const pct = (evt.loaded / evt.total) * 100;
-                    const bar = getEl('uploadProgressBar');
+            try {
+                const data = await uploadFile(file, (pct) => {
+                    const bar = document.getElementById(`bar-${i}`);
+                    const label = document.getElementById(`p-${i}`);
                     if (bar) bar.style.width = `${pct}%`;
-                }
-            };
-
-            xhr.onload = () => {
-                stopHum();
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    const data = JSON.parse(xhr.responseText);
-                    showShareLinkResult(data);
-                    playSuccessSynth();
-                } else {
-                    showToast('BRIDGE COLLAPSED. SIGNAL INTERFERENCE.', 'error');
-                    if (modalOverlay) modalOverlay.classList.add('hidden');
-                }
-            };
-
-            xhr.onerror = () => {
-                stopHum();
-                showToast('BRIDGE COLLAPSED.', 'error');
-                if (modalOverlay) modalOverlay.classList.add('hidden');
-            };
-
-            xhr.send(formData);
-        } catch (err) {
-            stopHum();
-            showToast('BRIDGE COLLAPSED.', 'error');
-            if (modalOverlay) modalOverlay.classList.add('hidden');
+                    if (label) label.textContent = `${Math.round(pct)}%`;
+                });
+                results.push(data);
+                if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'READY';
+            } catch (err) {
+                console.error('UPLOAD_ERR', err);
+                if (document.getElementById(`p-${i}`)) document.getElementById(`p-${i}`).textContent = 'FAILED';
+            }
         }
+
+        showMultiLinkResults(results);
     });
 }
 
-function showShareLinkResult(data) {
-    if (modalTitle) modalTitle.textContent = 'SECURE BRIDGE ESTABLISHED';
+async function uploadFile(file, onProgress) {
+    return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/upload`);
+
+        xhr.upload.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+                onProgress((evt.loaded / evt.total) * 100);
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(JSON.parse(xhr.responseText));
+            } else {
+                reject(new Error('SERVER_REJECTED'));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error('NETWORK_ERROR'));
+        xhr.send(formData);
+    });
+}
+
+function showMultiLinkResults(results) {
+    if (modalTitle) modalTitle.textContent = 'INITIALIZED SECURE LINKS';
     if (modalContent) {
         modalContent.innerHTML = `
-            <div class="file-info">
-                <i class="ri-check-double-line"></i>
-                <div class="file-details">
-                    <span class="file-name">${data.name}</span>
-                    <span class="file-size">${(data.size / (1024 * 1024)).toFixed(2)} MB</span>
-                </div>
+            <div id="results-list" style="width: 100%; max-height: 400px; overflow-y: auto;">
+                ${results.map(data => `
+                    <div class="share-result-row" style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem;">
+                        <div class="file-info" style="margin-bottom: 0.5rem;">
+                            <i class="ri-check-double-line"></i>
+                            <div class="file-details">
+                                <span class="file-name">${data.name}</span>
+                                <span class="file-size">${(data.size / (1024 * 1024)).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                        <div class="share-link-box">
+                            <input type="text" value="${data.url}" readonly />
+                            <button class="btn-copy" onclick="navigator.clipboard.writeText('${data.url}').then(() => showToast('LINK_COPIED', 'success'))" title="Copy link">
+                                <i class="ri-file-copy-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="share-link-box">
-                <input type="text" id="shareLinkInput" value="${data.url}" readonly />
-                <button class="btn-copy" id="copyLinkBtn" title="Copy link">
-                    <i class="ri-file-copy-line"></i>
-                </button>
-            </div>
-            <p class="share-link-note">ACCESS EXPIRES IN ${data.expiresIn.toUpperCase()}</p>
+            <p class="share-link-note" style="text-align: center;">ALL LINKS EXPIRE IN 24 HOURS</p>
         `;
     }
     if (modalActions) {
         modalActions.innerHTML = `
-            <button class="btn btn-primary" id="btnCloseShare">DONE</button>
+            <button class="btn btn-primary" id="btnCloseMulti">SECURE_TERMINAL</button>
         `;
     }
 
-    const btnClose = getEl('btnCloseShare');
+    const btnClose = getEl('btnCloseMulti');
     if (btnClose) {
         btnClose.onclick = () => {
             if (modalOverlay) modalOverlay.classList.add('hidden');
         };
     }
-
-    const btnCopy = getEl('copyLinkBtn');
-    if (btnCopy) {
-        btnCopy.onclick = () => {
-            const input = getEl('shareLinkInput');
-            if (input) {
-                navigator.clipboard.writeText(input.value).then(() => {
-                    showToast('ACCESS TOKEN COPIED TO CLIPBOARD', 'success');
-                });
-            }
-        };
-    }
+    playSuccessSynth();
 }
 
 // Start
