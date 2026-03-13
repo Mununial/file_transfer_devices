@@ -234,6 +234,7 @@ function initAudio() {
 
 function playClick() {
     initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'sine';
@@ -673,7 +674,8 @@ function addPeer(id, name, agentId = null) {
         receivedChunks: [],
         receivedSize: 0,
         encryptionKey: null,
-        transferStartTime: null
+        transferStartTime: null,
+        iceQueue: [] // Queue for ICE candidates before remote description is set
     });
 }
 
@@ -759,6 +761,7 @@ async function startConnection(peerId) {
 async function handleOffer(msg) {
     const pc = getOrCreateConnection(msg.sender);
     await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+    processIceQueue(msg.sender);
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -769,11 +772,28 @@ async function handleOffer(msg) {
 async function handleAnswer(msg) {
     const pc = getOrCreateConnection(msg.sender);
     await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+    processIceQueue(msg.sender);
 }
 
 async function handleCandidate(msg) {
+    const peer = peers.get(msg.sender);
     const pc = getOrCreateConnection(msg.sender);
-    await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+    if (!pc || !peer) return;
+
+    if (pc.remoteDescription && pc.remoteDescription.type) {
+        await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(e => console.warn("ICE_CANDIDATE_ERR", e));
+    } else {
+        peer.iceQueue.push(msg.candidate);
+    }
+}
+
+async function processIceQueue(peerId) {
+    const peer = peers.get(peerId);
+    if (!peer || !peer.connection) return;
+    while (peer.iceQueue.length > 0) {
+        const candidate = peer.iceQueue.shift();
+        await peer.connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn("ICE_QUEUED_ERR", e));
+    }
 }
 
 // ---------------------------
