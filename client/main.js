@@ -120,6 +120,31 @@ function setupDashboardNav() {
     const btnReceiveBig = document.getElementById('btn-receive-big');
     if (btnSendBig) btnSendBig.onclick = () => shareFileInput.click();
     if (btnReceiveBig) btnReceiveBig.onclick = () => showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+
+    // Handshake Logic
+    const btnGetCode = document.getElementById('btn-get-code');
+    const btnJoinCode = document.getElementById('btn-join-code');
+    const inputCode = document.getElementById('input-code');
+
+    if (btnGetCode) {
+        btnGetCode.onclick = () => {
+            sendSignaling({ type: 'create-passcode' });
+            btnGetCode.disabled = true;
+            setTimeout(() => { btnGetCode.disabled = false; }, 5000);
+        };
+    }
+
+    if (btnJoinCode) {
+        btnJoinCode.onclick = () => {
+            const code = inputCode.value.trim();
+            if (code.length === 6) {
+                sendSignaling({ type: 'use-passcode', code });
+                showToast('ATTEMPTING_DIMENSIONAL_LINK...', 'info');
+            } else {
+                showToast('INVALID_CODE_FORMAT', 'error');
+            }
+        };
+    }
 }
 
 function performContentGlitch(hideEl, showEl) {
@@ -142,7 +167,16 @@ function triggerProgressiveLoad() {
 }
 
 // WebRTC Configuration
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const rtcConfig = { 
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10
+};
 
 // UI Elements
 const getEl = (id) => document.getElementById(id);
@@ -488,7 +522,7 @@ function connectSignaling() {
                 break;
             case 'peer-joined':
                 addPeer(msg.peer.id, msg.peer.name, msg.peer.agentId);
-                showToast(`PROXIMITY_ALERT: ${msg.peer.name}`, 'success');
+                showToast(`SIGNAL_LOCKED: ${msg.peer.name.toUpperCase()}`, 'success');
                 
                 // If this joined peer is our QR target, auto-connect now
                 if (autoConnectTarget === msg.peer.id) {
@@ -497,6 +531,14 @@ function connectSignaling() {
                     setTimeout(() => startConnection(msg.peer.id), 1000);
                     autoConnectTarget = null; // Reset once triggered
                 }
+                break;
+            case 'passcode-ready':
+                const display = document.getElementById('display-code');
+                if (display) display.textContent = msg.code;
+                showToast('HANDSHAKE_CODE_GENERATED', 'info');
+                break;
+            case 'error':
+                showToast(`SIGNAL_ERROR: ${msg.message}`, 'error');
                 break;
             case 'peer-left':
                 removePeer(msg.peerId);
@@ -624,6 +666,14 @@ function getOrCreateConnection(peerId) {
             const dc = e.channel;
             setupDataChannel(peerId, dc);
             peer.dataChannel = dc;
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            console.log(`[ICE_STATE] ${pc.iceConnectionState}`);
+            if (pc.iceConnectionState === 'failed') {
+                pc.restartIce();
+                showToast('RE-STABILIZING_SIGNAL...', 'warning');
+            }
         };
 
         peer.connection = pc;

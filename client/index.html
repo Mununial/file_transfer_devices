@@ -106,6 +106,7 @@
             <aside class="sidebar">
                 <nav>
                     <button class="nav-item active" data-target="radar-view"><i class="ri-broadcast-line"></i> PROXIMITY_SCAN</button>
+                    <button class="nav-item" data-target="handshake-view"><i class="ri-key-2-line"></i> SECURE_HANDSHAKE</button>
                     <button class="nav-item" data-target="vault-view"><i class="ri-safe-2-line"></i> SECURE_VAULT</button>
                     <button class="nav-item" id="btn-manual-transfer"><i class="ri-upload-2-line"></i> CLOUD_BRIDGE</button>
                 </nav>
@@ -160,6 +161,31 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Handshake View -->
+                <div id="handshake-view" class="content-view hidden">
+                    <div class="handshake-shell">
+                        <div class="handshake-card">
+                            <h3>QUANTUM_HANDSHAKE</h3>
+                            <p class="tagline">LINK DEVICES ACROSS DIFFERENT SECTORS</p>
+                            
+                            <div class="handshake-grid">
+                                <div class="handshake-action">
+                                    <button id="btn-get-code" class="btn btn-secondary">GENERATE_CODE</button>
+                                    <div id="display-code" class="code-display">------</div>
+                                    <p class="expiry-note">EXPIRES IN 2 MINUTES</p>
+                                </div>
+                                
+                                <div class="handshake-divider">OR</div>
+                                
+                                <div class="handshake-action">
+                                    <input type="text" id="input-code" class="terminal-input" placeholder="ENTER 6-DIGIT CODE" maxlength="6">
+                                    <button id="btn-join-code" class="btn btn-primary">ESTABLISH_LINK</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </main>
 
             <!-- Bottom Nav (Mobile Only) -->
@@ -167,6 +193,10 @@
                 <button class="nav-item active" data-target="radar-view">
                     <i class="ri-broadcast-line"></i>
                     <span>RADAR</span>
+                </button>
+                <button class="nav-item" data-target="handshake-view">
+                    <i class="ri-key-2-line"></i>
+                    <span>LINK</span>
                 </button>
                 <button class="nav-item" id="btn-nav-send">
                     <i class="ri-send-plane-fill"></i>

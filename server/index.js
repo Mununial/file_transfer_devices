@@ -259,6 +259,17 @@ function getPeers(ip, excludeId) {
     return peers;
 }
 
+// Passcode system for cross-network (Laptop-Laptop) pairing
+const passcodes = new Map(); // code -> { senderId, expiresAt }
+
+function cleanupPasscodes() {
+    const now = Date.now();
+    passcodes.forEach((data, code) => {
+        if (now > data.expiresAt) passcodes.delete(code);
+    });
+}
+setInterval(cleanupPasscodes, 60000);
+
 // Send a message to a specific client
 function sendToClient(targetId, message) {
     clients.forEach((client) => {
@@ -349,6 +360,38 @@ wss.on('connection', (ws, req) => {
                         ...message,
                         sender: sender.id
                     });
+                }
+                break;
+            case 'create-passcode':
+                const code = Math.floor(100000 + Math.random() * 900000).toString();
+                passcodes.set(code, { 
+                    senderId: sender.id, 
+                    name: sender.name, 
+                    agentId: sender.agentId,
+                    expiresAt: Date.now() + 120000 // 2 min expiry
+                });
+                ws.send(JSON.stringify({ type: 'passcode-ready', code }));
+                break;
+            case 'use-passcode':
+                const entry = passcodes.get(message.code);
+                if (entry && entry.senderId !== sender.id) {
+                    const targetNode = Array.from(clients.values()).find(c => c.id === entry.senderId);
+                    if (targetNode) {
+                        // Link them both ways
+                        ws.send(JSON.stringify({
+                            type: 'peer-joined',
+                            peer: { id: targetNode.id, name: targetNode.name, agentId: targetNode.agentId }
+                        }));
+                        targetNode.socket.send(JSON.stringify({
+                            type: 'peer-joined',
+                            peer: { id: sender.id, name: sender.name, agentId: sender.agentId }
+                        }));
+                        passcodes.delete(message.code);
+                    } else {
+                        ws.send(JSON.stringify({ type: 'error', message: 'TARGET_OFFLINE' }));
+                    }
+                } else {
+                    ws.send(JSON.stringify({ type: 'error', message: 'INVALID_CODE' }));
                 }
                 break;
             default:
