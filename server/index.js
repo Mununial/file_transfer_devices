@@ -18,14 +18,20 @@ const admin = require('firebase-admin');
 // (Project Settings > Service Accounts) and place it in this 'server' folder.
 let db;
 try {
-    const serviceAccount = require('./serviceAccountKey.json');
+    let serviceAccount;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } else {
+        serviceAccount = require('./serviceAccountKey.json');
+    }
+    
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });
     db = admin.firestore();
     console.log('[FIREBASE_READY] CONNECTED TO HAWKINS_VAULT_REMOTE');
 } catch (error) {
-    console.error('[FIREBASE_ERROR] Missing serviceAccountKey.json or invalid config.');
+    console.error('[FIREBASE_ERROR]', error.message);
     console.log('Falling back to local storage (Offline Protocol)...');
 }
 
