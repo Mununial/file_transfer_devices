@@ -216,6 +216,21 @@ const btnRegister = document.getElementById('btn-register');
 const switchToSignup = document.getElementById('switch-to-signup');
 const switchToLogin = document.getElementById('switch-to-login');
 const btnLogout = document.getElementById('btn-logout');
+const btnUpsideDown = document.getElementById('btn-upside-down');
+
+if (btnUpsideDown) {
+    btnUpsideDown.onclick = () => {
+        document.body.classList.toggle('upside-down');
+        playClick();
+        if (document.body.classList.contains('upside-down')) {
+            showToast('DIMENSIONAL BREACH DETECTED. WEARING HAZMAT SUIT...', 'error');
+            startParticles();
+        } else {
+            showToast('RETURNING TO NORMAL REALITY.', 'success');
+            stopParticles();
+        }
+    };
+}
 
 btnEnter.onclick = () => {
     document.body.classList.add('crt-on');
@@ -1116,3 +1131,35 @@ function showShareLinkResult(data) {
 
 // Start
 // connectSignaling(); // This is now called by initApp() after login.
+// ---------------------------
+// Particle System (Upside Down)
+// ---------------------------
+let particleInterval = null;
+
+function startParticles() {
+    const container = document.getElementById('particle-container');
+    if (!container) return;
+    
+    particleInterval = setInterval(() => {
+        const p = document.createElement('div');
+        p.className = 'ash-particle';
+        const size = Math.random() * 5 + 2;
+        p.style.width = `${size}px`;
+        p.style.height = `${size}px`;
+        p.style.left = `${Math.random() * 100}vw`;
+        p.style.animationDuration = `${Math.random() * 5 + 5}s`;
+        p.style.opacity = Math.random();
+        container.appendChild(p);
+        
+        setTimeout(() => p.remove(), 10000);
+    }, 200);
+}
+
+function stopParticles() {
+    if (particleInterval) {
+        clearInterval(particleInterval);
+        particleInterval = null;
+    }
+    const container = document.getElementById('particle-container');
+    if (container) container.innerHTML = '';
+}

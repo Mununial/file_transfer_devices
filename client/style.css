@@ -12,6 +12,59 @@
   --scanline-color: rgba(57, 255, 20, 0.05);
 }
 
+body.upside-down {
+  --bg-color: #0d001a;
+  --panel-bg: rgba(13, 0, 26, 0.9);
+  --text-main: #e0e0e0;
+  --text-muted: rgba(224, 224, 224, 0.5);
+  --accent-primary: #8a2be2; /* Blue-violet */
+  --accent-glow: rgba(138, 43, 226, 0.6);
+  --wave-color: rgba(138, 43, 226, 0.3);
+  --glass-border: rgba(138, 43, 226, 0.4);
+  --scanline-color: rgba(255, 255, 255, 0.02);
+}
+
+#particle-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+  display: none;
+}
+
+body.upside-down #particle-container {
+  display: block;
+}
+
+.ash-particle {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: fall linear infinite;
+}
+
+@keyframes fall {
+  0% { transform: translateY(-10vh) translateX(0) scale(1); opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 1; }
+  100% { transform: translateY(110vh) translateX(20px) scale(0.5); opacity: 0; }
+}
+
+body.upside-down .logo::after {
+  content: " [DIMENSIONAL_BREACH_DETECTED]";
+  font-size: 0.7rem;
+  color: var(--accent-primary);
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

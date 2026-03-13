@@ -12,8 +12,27 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = 'HAWKINS_SECRET_GATE_KEY';
 const USERS_FILE = path.join(__dirname, 'users.json');
 
-// Simple low-tech user store (Offline First)
-function loadUsers() {
+const admin = require('firebase-admin');
+
+// IMPORTANT: Download your serviceAccountKey.json from Firebase Console 
+// (Project Settings > Service Accounts) and place it in this 'server' folder.
+let db;
+try {
+    const serviceAccount = require('./serviceAccountKey.json');
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+    db = admin.firestore();
+    console.log('[FIREBASE_READY] CONNECTED TO HAWKINS_VAULT_REMOTE');
+} catch (error) {
+    console.error('[FIREBASE_ERROR] Missing serviceAccountKey.json or invalid config.');
+    console.log('Falling back to local storage (Offline Protocol)...');
+}
+
+const usersCol = db ? db.collection('users') : null;
+
+// Simple low-tech user store (Offline First / Fallback)
+function loadUsersLocal() {
     if (!fs.existsSync(USERS_FILE)) return [];
     try {
         return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
@@ -22,7 +41,7 @@ function loadUsers() {
     }
 }
 
-function saveUsers(users) {
+function saveUsersLocal(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
@@ -43,15 +62,28 @@ app.post('/api/signup', async (req, res) => {
         return res.status(400).json({ error: 'Incomplete credentials.' });
     }
 
-    const users = loadUsers();
-    if (users.find(u => u.username === username)) {
-        return res.status(400).json({ error: 'Agent ID already deployed.' });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = { username, password: hashedPassword, fullName, createdAt: new Date() };
-    users.push(newUser);
-    saveUsers(users);
+
+    if (usersCol) {
+        try {
+            const userDoc = await usersCol.doc(username).get();
+            if (userDoc.exists) {
+                return res.status(400).json({ error: 'Agent ID already deployed.' });
+            }
+            await usersCol.doc(username).set(newUser);
+        } catch (e) {
+            return res.status(500).json({ error: 'Firebase synchronization failed.' });
+        }
+    } else {
+        // Fallback
+        const users = loadUsersLocal();
+        if (users.find(u => u.username === username)) {
+            return res.status(400).json({ error: 'Agent ID already deployed.' });
+        }
+        users.push(newUser);
+        saveUsersLocal(users);
+    }
 
     const token = jwt.sign({ username: newUser.username, fullName: newUser.fullName }, JWT_SECRET);
     res.json({ token, agentId: username, fullName });
@@ -59,8 +91,19 @@ app.post('/api/signup', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    const users = loadUsers();
-    const user = users.find(u => u.username === username);
+    let user;
+
+    if (usersCol) {
+        try {
+            const userDoc = await usersCol.doc(username).get();
+            if (userDoc.exists) user = userDoc.data();
+        } catch (e) {
+            return res.status(500).json({ error: 'Firebase connection lost.' });
+        }
+    } else {
+        const users = loadUsersLocal();
+        user = users.find(u => u.username === username);
+    }
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ error: 'Invalid clearance level.' });
