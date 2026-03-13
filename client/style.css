@@ -739,6 +739,26 @@ body.crt-on::before {
     font-weight: bold;
 }
 
+.btn-peer-stabilize {
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    font-size: 0.6rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.btn-peer-stabilize:hover {
+    background: var(--text-main);
+    color: black;
+}
+
 .peer-details {
     display: flex;
     flex-direction: column;

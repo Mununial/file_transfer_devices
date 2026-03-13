@@ -48,6 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+    // Security Warning for WebRTC
+    if (!window.isSecureContext && !isLocal) {
+        showToast("SECURITY_BLOCK: HTTPS REQUIRED FOR P2P", "error");
+        setTimeout(() => {
+            alert("SECURE_CONTEXT_REQUIRED: Mobile/Laptop transfer NEEDS HTTPS to function. Please use the secured Render deployment link.");
+        }, 1000);
+    }
+
     if (currentUser) {
         showView('dashboard');
         updateAgentBadge();
@@ -183,7 +191,8 @@ const rtcConfig = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' }
+        { urls: 'stun:stun.services.mozilla.com' },
+        { urls: 'stun:stun.ekiga.net' }
     ],
     iceCandidatePoolSize: 10,
     iceTransportPolicy: 'all'
@@ -536,16 +545,17 @@ function connectSignaling() {
                 addPeer(msg.peer.id, msg.peer.name, msg.peer.agentId);
                 showToast(`SECURE_LINK_ESTABLISHED: ${msg.peer.name.toUpperCase()}`, 'success');
                 
-                // Auto-switch to Radar View to show the connected device
+                // Switch to Radar View
                 const radarBtn = document.querySelector('.nav-item[data-target="radar-view"]');
-                if (radarBtn) radarBtn.click();
-
-                // If this joined peer is our QR target, auto-connect now
-                if (autoConnectTarget === msg.peer.id) {
-                    autoSendPending = true; 
-                    setTimeout(() => startConnection(msg.peer.id), 1000);
-                    autoConnectTarget = null;
+                if (radarBtn) {
+                   radarBtn.click();
                 }
+
+                // AUTO-WARM: Initiate WebRTC Bridge immediately for smooth transfer
+                setTimeout(() => {
+                    console.log(`[AUTO_WARM] Pairing with ${msg.peer.id}`);
+                    startConnection(msg.peer.id);
+                }, 1000);
                 break;
             case 'passcode-ready':
                 const display = document.getElementById('display-code');
@@ -628,8 +638,20 @@ function addPeer(id, name, agentId = null) {
         <div class="peer-details">
             <div class="peer-name">${name}</div>
             <div class="peer-id-label">${agentId ? `[ID: ${agentId}]` : '[ANONYMOUS]'}</div>
+            <button class="btn-peer-stabilize" title="RE-CONNECT_SIGNAL">
+                <i class="ri-refresh-line"></i>
+                STABILIZE
+            </button>
         </div>
     `;
+
+    const stabilizeBtn = el.querySelector('.btn-peer-stabilize');
+    stabilizeBtn.onclick = (e) => {
+        e.stopPropagation();
+        showToast('RE-ESTABLISHING SECURE BRIDGE...', 'info');
+        startConnection(id);
+    };
+
     el.onclick = (e) => { 
         e.stopPropagation();
         currentTransferTarget = id; 
