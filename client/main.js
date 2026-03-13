@@ -115,11 +115,26 @@ function setupDashboardNav() {
         };
     });
 
-    // Special handlers for big buttons
     const btnSendBig = document.getElementById('btn-send-big');
     const btnReceiveBig = document.getElementById('btn-receive-big');
-    if (btnSendBig) btnSendBig.onclick = () => shareFileInput.click();
-    if (btnReceiveBig) btnReceiveBig.onclick = () => showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+    
+    if (btnSendBig) {
+        btnSendBig.onclick = () => {
+            if (peers.size === 1) {
+                const peerId = Array.from(peers.keys())[0];
+                currentTransferTarget = peerId;
+                if (fileInput) fileInput.click();
+            } else if (peers.size > 1) {
+                showToast('SELECT A NODE FROM RADAR TO TRANSMIT', 'info');
+            } else {
+                showToast('NO_NODES_FOUND. USE HANDSHAKE OR SCAN.', 'error');
+            }
+        };
+    }
+
+    if (btnReceiveBig) {
+        btnReceiveBig.onclick = () => showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+    }
 
     // Handshake Logic
     const btnGetCode = document.getElementById('btn-get-code');
@@ -522,14 +537,17 @@ function connectSignaling() {
                 break;
             case 'peer-joined':
                 addPeer(msg.peer.id, msg.peer.name, msg.peer.agentId);
-                showToast(`SIGNAL_LOCKED: ${msg.peer.name.toUpperCase()}`, 'success');
+                showToast(`SECURE_LINK_ESTABLISHED: ${msg.peer.name.toUpperCase()}`, 'success');
                 
+                // Auto-switch to Radar View to show the connected device
+                const radarBtn = document.querySelector('.nav-item[data-target="radar-view"]');
+                if (radarBtn) radarBtn.click();
+
                 // If this joined peer is our QR target, auto-connect now
                 if (autoConnectTarget === msg.peer.id) {
-                    autoSendPending = true; // Flag for instant sharing
-                    showToast(`PHASING INTO TARGET: ${msg.peer.name}`, 'info');
+                    autoSendPending = true; 
                     setTimeout(() => startConnection(msg.peer.id), 1000);
-                    autoConnectTarget = null; // Reset once triggered
+                    autoConnectTarget = null;
                 }
                 break;
             case 'passcode-ready':
