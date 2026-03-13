@@ -711,7 +711,9 @@ function addPeer(id, name, agentId = null) {
         receivedSize: 0,
         encryptionKey: null,
         transferStartTime: null,
-        iceQueue: [] // Queue for ICE candidates before remote description is set
+        iceQueue: [], // Queue for ICE candidates before remote description is set
+        messageQueue: [],
+        isProcessingQueue: false
     });
 }
 
@@ -741,7 +743,18 @@ function getOrCreateConnection(peerId) {
     let peer = peers.get(peerId);
     if (!peer) return null;
 
-    if (!peer.connection) {
+    // Check if current connection is unusable
+    const isUnusable = peer.connection && (
+        peer.connection.connectionState === 'failed' || 
+        peer.connection.connectionState === 'closed'
+    );
+
+    if (!peer.connection || isUnusable) {
+        if (isUnusable) {
+            console.log(`[CLEAN_UP] Dropping unusable connection to ${peer.name}`);
+            peer.connection.close();
+        }
+        
         const pc = new RTCPeerConnection(rtcConfig);
 
         pc.onicecandidate = (e) => {
@@ -789,9 +802,19 @@ function getOrCreateConnection(peerId) {
 }
 
 async function startConnection(peerId) {
-    const pc = getOrCreateConnection(peerId);
     const peer = peers.get(peerId);
+    if (!peer) return;
 
+    // Reuse existing stable bridge if possible
+    if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+        console.log(`[REUSING_BRIDGE] Node ${peerId.substring(0, 4)} already has an active link.`);
+        if (peer.fileQueue.length > 0 && !peer.pendingFile) {
+            sendFileHeader(peerId, peer.fileQueue[0]);
+        }
+        return;
+    }
+
+    const pc = getOrCreateConnection(peerId);
     const dc = pc.createDataChannel('fileTransfer');
     setupDataChannel(peerId, dc);
     peer.dataChannel = dc;
@@ -874,14 +897,31 @@ function setupDataChannel(peerId, dc) {
         stopHum();
     };
 
-        dc.onmessage = async (e) => {
-            const peer = peers.get(peerId);
-            if (!peer) return;
+    dc.onmessage = (e) => {
+        const peer = peers.get(peerId);
+        if (!peer) return;
 
-            if (typeof e.data === 'string') {
-                const msg = JSON.parse(e.data);
+        // Push all messages to a queue to ensure strict order of processing,
+        // especially important when binary chunks require async decryption.
+        peer.messageQueue.push(e.data);
+        processPeerMessageQueue(peerId);
+    };
+}
+
+async function processPeerMessageQueue(peerId) {
+    const peer = peers.get(peerId);
+    if (!peer || peer.isProcessingQueue || peer.messageQueue.length === 0) return;
+
+    peer.isProcessingQueue = true;
+
+    while (peer.messageQueue.length > 0) {
+        const data = peer.messageQueue.shift();
+
+        if (typeof data === 'string') {
+            try {
+                const msg = JSON.parse(data);
                 if (msg.type === 'file-header') {
-                    handleIncomingFileRequest(msg, peerId);
+                    await handleIncomingFileRequest(msg, peerId);
                 } else if (msg.type === 'transfer-accepted') {
                     startSendingFile(peerId);
                 } else if (msg.type === 'transfer-rejected') {
@@ -893,16 +933,26 @@ function setupDataChannel(peerId, dc) {
                         sendFileHeader(peerId, peer.fileQueue[0]);
                     }
                 }
-            } else {
-                // Binary chunk received (Encrypted)
-                try {
-                    const decrypted = await decryptData(new Uint8Array(e.data), peer.encryptionKey);
-                    receiveChunk(decrypted, peerId);
-                } catch (err) {
-                    console.error('DECRYPTION_FAILED', err);
-                }
+            } catch (err) {
+                console.error('JSON_PARSE_ERR', err);
             }
-        };
+        } else {
+            // Binary chunk received (Encrypted)
+            try {
+                // Ensure peer has encryption key before decrypting
+                if (peer.encryptionKey) {
+                    const decrypted = await decryptData(new Uint8Array(data), peer.encryptionKey);
+                    receiveChunk(decrypted, peerId);
+                } else {
+                    console.warn('RECEIVED_BINARY_WITHOUT_KEY');
+                }
+            } catch (err) {
+                console.error('DECRYPTION_FAILED', err);
+            }
+        }
+    }
+
+    peer.isProcessingQueue = false;
 }
 
 async function computeHash(data) {
@@ -1035,10 +1085,14 @@ async function startSendingFile(peerId) {
             offset += e.target.result.byteLength;
 
             if (offset < file.size) {
-                if(dc.bufferedAmount > 1024 * 1024) {
+                // High-performance backpressure: 1MB threshold
+                if (dc.bufferedAmount > 1024 * 1024) {
+                    // Use onbufferedamountlow for even better performance if supported,
+                    // but for now, a short delay is robust across all browsers.
                     setTimeout(() => readSlice(offset), 50);
                 } else {
-                    readSlice(offset);
+                    // Micro-task yield to keep UI responsive
+                    setTimeout(() => readSlice(offset), 0);
                 }
             } else {
                 dc.send(JSON.stringify({ type: 'file-complete' }));
