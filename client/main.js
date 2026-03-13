@@ -207,19 +207,13 @@ function triggerProgressiveLoad() {
     });
 }
 
-const rtcConfig = { 
+const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' },
-        { urls: 'stun:stun.relay.metered.ca:443' } // Added an extra reliable stun
+        { urls: 'stun:stun.relay.metered.ca:443' },
+        { urls: 'stun:stun.stunprotocol.org:3478' }
     ],
-    iceCandidatePoolSize: 10,
-    iceTransportPolicy: 'all',
-    bundlePolicy: 'max-bundle'
+    iceCandidatePoolSize: 10
 };
 
 // UI Elements
@@ -604,9 +598,17 @@ function connectSignaling() {
             case 'peer-updated':
                 updatePeerIdentity(msg.peer.id, msg.peer.agentId);
                 break;
-            case 'offer': await handleOffer(msg); break;
-            case 'answer': await handleAnswer(msg); break;
-            case 'candidate': await handleCandidate(msg); break;
+            case 'offer':
+            console.log(`[SIGNALING] INCOMING_OFFER_FROM: ${msg.sender}`);
+            handleOffer(msg);
+            break;
+        case 'answer':
+            console.log(`[SIGNALING] INCOMING_ANSWER_FROM: ${msg.sender}`);
+            handleAnswer(msg);
+            break;
+        case 'candidate':
+            handleCandidate(msg);
+            break;
             case 'file-header': handleIncomingFileRequest(msg); break;
             case 'ping': sendSignaling({ type: 'pong' }); break;
         }
