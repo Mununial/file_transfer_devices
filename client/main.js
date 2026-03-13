@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     autoConnectTarget = params.get('target');
     
     initApp();
+    
+    // Hide Splash Screen after timeout
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) splash.classList.add('fade-out');
+    }, 2500);
 });
 
 function initApp() {
@@ -74,14 +80,30 @@ function setupDashboardNav() {
     const contentViews = document.querySelectorAll('.content-view');
 
     navItems.forEach(item => {
-        item.onclick = () => {
+        item.onclick = (e) => {
+            const id = item.id;
+            if (id === 'btn-manual-transfer' || id === 'btn-nav-send' || id === 'btn-send-big') {
+                if (shareFileInput) shareFileInput.click();
+                return;
+            }
+            if (id === 'btn-receive-big') {
+                showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+                return;
+            }
+
             const target = item.getAttribute('data-target');
-            if (target === 'initialize-transfer') return; // Handled by separate listener
+            if (!target) return;
+            
             if (target === 'vault-view') renderVault();
 
-            // Nav UI
-            navItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
+            // Sync Nav UI (Both Desktop Sidebar and Mobile Bottom Nav)
+            navItems.forEach(i => {
+                if (i.getAttribute('data-target') === target) {
+                    i.classList.add('active');
+                } else {
+                    i.classList.remove('active');
+                }
+            });
 
             // View Switch with Glitch
             const currentView = document.querySelector('.content-view:not(.hidden)');
@@ -92,6 +114,12 @@ function setupDashboardNav() {
             }
         };
     });
+
+    // Special handlers for big buttons
+    const btnSendBig = document.getElementById('btn-send-big');
+    const btnReceiveBig = document.getElementById('btn-receive-big');
+    if (btnSendBig) btnSendBig.onclick = () => shareFileInput.click();
+    if (btnReceiveBig) btnReceiveBig.onclick = () => showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
 }
 
 function performContentGlitch(hideEl, showEl) {

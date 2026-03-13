@@ -140,6 +140,172 @@ body.crt-on::before {
 
 @keyframes blink { 50% { opacity: 0; } }
 
+/* Splash Screen */
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+#splash-screen.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1.1);
+}
+
+.splash-logo {
+  text-align: center;
+  margin-bottom: 3rem;
+  color: var(--text-main);
+}
+
+.splash-logo i {
+  font-size: 5rem;
+  animation: pulse-green 2s infinite;
+}
+
+.splash-text {
+  font-size: 2.5rem;
+  font-weight: 900;
+  letter-spacing: 10px;
+  margin-top: 1rem;
+}
+
+.splash-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 5px;
+  margin-top: 5px;
+}
+
+.splash-loader {
+  width: 200px;
+  height: 4px;
+  background: rgba(57, 255, 20, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.loader-inner {
+  position: absolute;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--text-main);
+  animation: terminal-load 2s ease-in-out infinite;
+}
+
+/* Bottom Nav (Mobile) */
+.bottom-nav {
+  display: none; /* Hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  .sidebar { display: none !important; }
+  
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: rgba(5, 5, 5, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--glass-border);
+    z-index: 1000;
+    justify-content: space-around;
+    align-items: center;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-muted);
+    padding: 0;
+  }
+
+  .bottom-nav .nav-item i { font-size: 1.5rem; }
+  .bottom-nav .nav-item span { font-size: 0.7rem; letter-spacing: 1px; }
+
+  .bottom-nav .nav-item.active {
+    color: var(--text-main);
+    text-shadow: 0 0 10px var(--text-main);
+  }
+
+  #main-content {
+    padding-bottom: 80px;
+  }
+}
+
+/* Big Action Buttons (ShareMe Style) */
+.mobile-actions {
+  position: absolute;
+  bottom: 120px;
+  width: 100%;
+  padding: 0 1.5rem;
+  display: none; /* Only show on mobile */
+  justify-content: center;
+  gap: 1.5rem;
+  z-index: 50;
+}
+
+@media (max-width: 768px) {
+  .mobile-actions { display: flex; }
+}
+
+.action-btn {
+  flex: 1;
+  max-width: 140px;
+  height: 140px;
+  background: var(--panel-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.action-btn i { font-size: 3rem; }
+.action-btn span { font-weight: bold; letter-spacing: 2px; font-size: 0.9rem; }
+
+.action-btn.send {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 10px 30px rgba(255, 49, 49, 0.1);
+}
+
+.action-btn.receive {
+  color: var(--text-main);
+  border-color: var(--text-main);
+  box-shadow: 0 10px 30px rgba(57, 255, 20, 0.1);
+}
+
+.action-btn:active {
+  transform: scale(0.9);
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .btn-giant {
   padding: 1.5rem 3rem;
   background: transparent;

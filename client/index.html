@@ -13,6 +13,18 @@
   </head>
   <body class="crt-off">
     <div id="particle-container"></div>
+    
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="splash-logo">
+            <i class="ri-radar-line"></i>
+            <div class="splash-text">GATEKEEPER</div>
+            <div class="splash-sub">HAWKINS LAB PROTOCOL</div>
+        </div>
+        <div class="splash-loader">
+            <div class="loader-inner"></div>
+        </div>
+    </div>
     <!-- View 1: Entry Portal -->
     <div id="view-entry" class="view">
         <div class="portal-centered">
@@ -94,8 +106,8 @@
             <aside class="sidebar">
                 <nav>
                     <button class="nav-item active" data-target="radar-view"><i class="ri-broadcast-line"></i> PROXIMITY_SCAN</button>
-                    <button class="nav-item" data-target="initialize-transfer"><i class="ri-lock-password-line"></i> INITIALIZE_TRANSFER</button>
                     <button class="nav-item" data-target="vault-view"><i class="ri-safe-2-line"></i> SECURE_VAULT</button>
+                    <button class="nav-item" id="btn-manual-transfer"><i class="ri-upload-2-line"></i> CLOUD_BRIDGE</button>
                 </nav>
                 <div class="sidebar-status">
                     <div class="status">
@@ -119,6 +131,18 @@
                         </div>
                         <div id="peersContainer"></div>
                     </div>
+                    
+                    <div class="mobile-actions">
+                        <button id="btn-send-big" class="action-btn send">
+                            <i class="ri-send-plane-fill"></i>
+                            <span>SEND</span>
+                        </button>
+                        <button id="btn-receive-big" class="action-btn receive">
+                            <i class="ri-download-cloud-2-line"></i>
+                            <span>RECEIVE</span>
+                        </button>
+                    </div>
+
                     <div class="view-label">SCANNING_FOR_PROXIMITY_SIGNALS...</div>
                 </div>
 
@@ -136,17 +160,23 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Signal Map View -->
-                <div id="map-view" class="content-view hidden">
-                    <div class="thematic-placeholder">
-                        <i class="ri-map-pin-line"></i>
-                        <h4>LAB_PSIONIC_MAP</h4>
-                        <p>TRACKING SUB-DIMENSIONAL DISTURBANCES... <br/> [NO_BREACH_DETECTED_IN_LOCAL_SECTORS]</p>
-                        <div class="radar-mini"></div>
-                    </div>
-                </div>
             </main>
+
+            <!-- Bottom Nav (Mobile Only) -->
+            <nav class="bottom-nav">
+                <button class="nav-item active" data-target="radar-view">
+                    <i class="ri-broadcast-line"></i>
+                    <span>RADAR</span>
+                </button>
+                <button class="nav-item" id="btn-nav-send">
+                    <i class="ri-send-plane-fill"></i>
+                    <span>SEND</span>
+                </button>
+                <button class="nav-item" data-target="vault-view">
+                    <i class="ri-safe-2-line"></i>
+                    <span>VAULT</span>
+                </button>
+            </nav>
         </div>
     </div>
 
