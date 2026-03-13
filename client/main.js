@@ -85,6 +85,18 @@ function showView(viewId) {
     if (viewId === 'dashboard') {
         triggerProgressiveLoad();
         setupDashboardNav();
+        updateBackButtonVisibility('radar-view');
+    }
+}
+
+function updateBackButtonVisibility(target) {
+    const backBtn = document.getElementById('btn-dashboard-back');
+    if (!backBtn) return;
+    
+    if (target === 'radar-view') {
+        backBtn.classList.add('hidden');
+    } else {
+        backBtn.classList.remove('hidden');
     }
 }
 
@@ -125,9 +137,18 @@ function setupDashboardNav() {
 
             if (currentView && nextView && currentView !== nextView) {
                 performContentGlitch(currentView, nextView);
+                updateBackButtonVisibility(target);
             }
         };
     });
+
+    const btnBack = document.getElementById('btn-dashboard-back');
+    if (btnBack) {
+        btnBack.onclick = () => {
+            const radarBtn = document.querySelector('.nav-item[data-target="radar-view"]');
+            if (radarBtn) radarBtn.click();
+        };
+    }
 
     // Handshake Logic
     const btnGetCode = document.getElementById('btn-get-code');
@@ -1220,13 +1241,25 @@ function showP2PPasswordChallenge(senderId, authHash) {
 
 function startP2PTransfer(senderId) {
     const sender = peers.get(senderId);
+    if (!sender || !sender.dataChannel || sender.dataChannel.readyState !== 'open') {
+        showToast('BRIDGE_STABILITY_ERROR: RETRYING...', 'error');
+        startConnection(senderId); // Force re-stabilize
+        return;
+    }
+
     const mActions = getEl('modalActions');
     if (mActions) mActions.innerHTML = '';
     
     startHum();
-    sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
-    sender.transferStartTime = Date.now();
-    showToast('ESTABLISHING_TUNNEL...', 'info');
+    try {
+        sender.dataChannel.send(JSON.stringify({ type: 'transfer-accepted' }));
+        sender.transferStartTime = Date.now();
+        showToast('ESTABLISHING_TUNNEL...', 'info');
+    } catch (err) {
+        console.error('TRANSFER_ACCEPT_SEND_FAILED', err);
+        showToast('TUNNEL_FAILED: RETRYING...', 'error');
+        startConnection(senderId);
+    }
 }
 
 function showDownloadAuthModal(fileId) {

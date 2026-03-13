@@ -249,6 +249,31 @@ body.crt-on::before {
   #main-content {
     padding-bottom: 80px;
   }
+
+  #btn-dashboard-back {
+    display: inline-flex !important;
+  }
+}
+
+#btn-dashboard-back.hidden {
+    display: none !important;
+}
+
+#btn-dashboard-back {
+    margin-right: 0.5rem;
+    color: var(--accent-primary);
+    font-size: 1.4rem;
+    padding: 0.2rem;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 49, 49, 0.1);
+    border-radius: 4px;
+    align-items: center;
+    justify-content: center;
+}
+
+#btn-dashboard-back:hover {
+    background: var(--accent-primary);
+    color: white;
 }
 
 
