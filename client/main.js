@@ -183,7 +183,6 @@ function triggerProgressiveLoad() {
     });
 }
 
-// WebRTC Configuration
 const rtcConfig = { 
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -191,11 +190,11 @@ const rtcConfig = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' },
-        { urls: 'stun:stun.ekiga.net' }
+        { urls: 'stun:stun.services.mozilla.com' }
     ],
-    iceCandidatePoolSize: 10,
-    iceTransportPolicy: 'all'
+    iceCandidatePoolSize: 20,
+    iceTransportPolicy: 'all',
+    bundlePolicy: 'max-bundle'
 };
 
 // UI Elements
@@ -727,9 +726,13 @@ function getOrCreateConnection(peerId) {
 
         pc.oniceconnectionstatechange = () => {
             console.log(`[ICE_STATE] ${pc.iceConnectionState}`);
-            if (pc.iceConnectionState === 'failed') {
-                console.warn('ICE Failed, restarting...');
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                console.warn('ICE Failed, attempting aggressive recovery...');
                 pc.restartIce();
+                // If we are the initiator, re-spark the offer
+                setTimeout(() => {
+                    if (pc.signalingState === 'stable') startConnection(peerId);
+                }, 2000);
             }
         };
 

@@ -78,7 +78,7 @@ body.upside-down .logo::after {
 
 /* Existing root and body styles modified for CRT-OFF state */
 body {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Consolas', 'Courier New', 'Share Tech Mono', monospace;
   background-color: var(--bg-color);
   color: var(--text-main);
   min-height: 100vh;
