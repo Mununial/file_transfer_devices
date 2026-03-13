@@ -576,6 +576,7 @@ function connectSignaling() {
             case 'answer': await handleAnswer(msg); break;
             case 'candidate': await handleCandidate(msg); break;
             case 'file-header': handleIncomingFileRequest(msg); break;
+            case 'ping': sendSignaling({ type: 'pong' }); break;
         }
     };
 

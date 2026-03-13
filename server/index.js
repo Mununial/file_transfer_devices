@@ -293,8 +293,8 @@ wss.on('connection', (ws, req) => {
     const name = generateName();
     const ip = getClientIp(req);
 
-    // Register client
-    clients.set(ws, { id, name, ip, socket: ws });
+// Register client
+    clients.set(ws, { id, name, ip, socket: ws, lastSeen: Date.now() });
 
     console.log(`[SECURE_NODE_CONN] NODE_ID: ${id.substring(0,8)} | ALIAS: ${name} | FIELD_IP: ${ip}`);
 
@@ -315,11 +315,15 @@ wss.on('connection', (ws, req) => {
     ws.on('message', (messageAsString) => {
         let message;
         try {
+            const client = clients.get(ws);
+            if (client) client.lastSeen = Date.now();
             message = JSON.parse(messageAsString);
         } catch (e) {
             console.error('PROTOCOL_ERR: INVALID_PACKET', e);
             return;
         }
+
+        if (message.type === 'pong') return;
 
         const sender = clients.get(ws);
         if (!sender) return;
@@ -413,6 +417,21 @@ wss.on('connection', (ws, req) => {
         }
     });
 });
+
+// Heartbeat cleanup for ghost nodes
+setInterval(() => {
+    const now = Date.now();
+    clients.forEach((client, ws) => {
+        if (now - client.lastSeen > 35000) {
+            console.log(`[TIMEOUT_KICK] Node ${client.id.substring(0,8)} timed out.`);
+            ws.terminate();
+        } else {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }
+    });
+}, 30000);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
