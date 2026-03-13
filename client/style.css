@@ -251,60 +251,6 @@ body.crt-on::before {
   }
 }
 
-/* Big Action Buttons (ShareMe Style) */
-.mobile-actions {
-  position: absolute;
-  bottom: 120px;
-  width: 100%;
-  padding: 0 1.5rem;
-  display: none; /* Only show on mobile */
-  justify-content: center;
-  gap: 1.5rem;
-  z-index: 50;
-}
-
-@media (max-width: 768px) {
-  .mobile-actions { display: flex; }
-}
-
-.action-btn {
-  flex: 1;
-  max-width: 140px;
-  height: 140px;
-  background: var(--panel-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.action-btn i { font-size: 3rem; }
-.action-btn span { font-weight: bold; letter-spacing: 2px; font-size: 0.9rem; }
-
-.action-btn.send {
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
-  box-shadow: 0 10px 30px rgba(255, 49, 49, 0.1);
-}
-
-.action-btn.receive {
-  color: var(--text-main);
-  border-color: var(--text-main);
-  box-shadow: 0 10px 30px rgba(57, 255, 20, 0.1);
-}
-
-.action-btn:active {
-  transform: scale(0.9);
-}
-
-.action-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
 
 .btn-giant {
   padding: 1.5rem 3rem;

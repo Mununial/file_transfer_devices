@@ -109,14 +109,6 @@ function setupDashboardNav() {
         };
     });
 
-    const btnSendBig = document.getElementById('btn-send-big');
-    if (btnSendBig) btnSendBig.onclick = handleSendAction;
-
-    const btnReceiveBig = document.getElementById('btn-receive-big');
-    if (btnReceiveBig) {
-        btnReceiveBig.onclick = () => showToast('RADAR_ACTIVE: WAITING FOR INCOMING SIGNAL', 'info');
-    }
-
     // Handshake Logic
     const btnGetCode = document.getElementById('btn-get-code');
     const btnJoinCode = document.getElementById('btn-join-code');
