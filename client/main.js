@@ -81,28 +81,22 @@ function setupDashboardNav() {
 
     navItems.forEach(item => {
         item.onclick = (e) => {
+            const target = item.getAttribute('data-target');
             const id = item.id;
-            if (id === 'btn-manual-transfer' || id === 'btn-nav-send' || id === 'btn-send-big') {
-                if (shareFileInput) shareFileInput.click();
-                return;
-            }
-            if (id === 'btn-receive-big') {
-                showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+
+            // Handle "Send" action across different buttons
+            if (id === 'btn-nav-send' || id === 'btn-manual-transfer') {
+                handleSendAction();
                 return;
             }
 
-            const target = item.getAttribute('data-target');
             if (!target) return;
             
             if (target === 'vault-view') renderVault();
 
-            // Sync Nav UI (Both Desktop Sidebar and Mobile Bottom Nav)
+            // Sync Nav UI
             navItems.forEach(i => {
-                if (i.getAttribute('data-target') === target) {
-                    i.classList.add('active');
-                } else {
-                    i.classList.remove('active');
-                }
+                i.classList.toggle('active', i.getAttribute('data-target') === target);
             });
 
             // View Switch with Glitch
@@ -116,24 +110,11 @@ function setupDashboardNav() {
     });
 
     const btnSendBig = document.getElementById('btn-send-big');
-    const btnReceiveBig = document.getElementById('btn-receive-big');
-    
-    if (btnSendBig) {
-        btnSendBig.onclick = () => {
-            if (peers.size === 1) {
-                const peerId = Array.from(peers.keys())[0];
-                currentTransferTarget = peerId;
-                if (fileInput) fileInput.click();
-            } else if (peers.size > 1) {
-                showToast('SELECT A NODE FROM RADAR TO TRANSMIT', 'info');
-            } else {
-                showToast('NO_NODES_FOUND. USE HANDSHAKE OR SCAN.', 'error');
-            }
-        };
-    }
+    if (btnSendBig) btnSendBig.onclick = handleSendAction;
 
+    const btnReceiveBig = document.getElementById('btn-receive-big');
     if (btnReceiveBig) {
-        btnReceiveBig.onclick = () => showToast('RADAR ACTIVE. WAITING FOR PROXIMITY SIGNAL.', 'info');
+        btnReceiveBig.onclick = () => showToast('RADAR_ACTIVE: WAITING FOR INCOMING SIGNAL', 'info');
     }
 
     // Handshake Logic
@@ -154,11 +135,32 @@ function setupDashboardNav() {
             const code = inputCode.value.trim();
             if (code.length === 6) {
                 sendSignaling({ type: 'use-passcode', code });
-                showToast('ATTEMPTING_DIMENSIONAL_LINK...', 'info');
+                showToast('LINKING_SECTORS...', 'info');
             } else {
-                showToast('INVALID_CODE_FORMAT', 'error');
+                showToast('INVALID_AUTH_CODE', 'error');
             }
         };
+    }
+}
+
+// Consolidated Send Action: Decides between P2P and Cloud
+function handleSendAction() {
+    if (peers.size === 1) {
+        // One peer? Direct P2P
+        const peerId = Array.from(peers.keys())[0];
+        currentTransferTarget = peerId;
+        const fInput = document.getElementById('fileInput');
+        if (fInput) fInput.click();
+    } else if (peers.size > 1) {
+        // Multiple peers? Ask them to pick one on Radar
+        showToast('SELECT A NODE FROM RADAR FOR DIRECT P2P', 'info');
+        const radarBtn = document.querySelector('.nav-item[data-target="radar-view"]');
+        if (radarBtn) radarBtn.click();
+    } else {
+        // No peers? Offer Cloud Bridge
+        showToast('NO_LOCAL_NODES: ACCESSING CLOUD_BRIDGE...', 'info');
+        const sInput = document.getElementById('shareFileInput');
+        if (sInput) sInput.click();
     }
 }
 
@@ -1015,10 +1017,15 @@ function finishReceivingFile(senderId) {
         name: peer.incomingFile.name,
         size: peer.incomingFile.size,
         blob: blob,
-        sender: peer.name,
+        sender: peer.name || 'UNKNOWN_NODE',
         timestamp: new Date().toLocaleTimeString()
     });
-    renderVault();
+    
+    // Auto-update Vault if visible
+    const vaultView = document.getElementById('vault-view');
+    if (vaultView && !vaultView.classList.contains('hidden')) {
+        renderVault();
+    }
     
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1028,20 +1035,22 @@ function finishReceivingFile(senderId) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`INTEL SECURED: ${peer.incomingFile.name.toUpperCase()}`, 'success');
+    showToast(`INTEL_SECURED: ${peer.incomingFile.name.toUpperCase()}`, 'success');
 
-    // Signal clearance for next file if any
+    // Signal clearance for next file
     if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
         peer.dataChannel.send(JSON.stringify({ type: 'transfer-finished-ack' }));
     }
 
-    if (modalOverlay) modalOverlay.classList.add('hidden');
+    const modal = document.getElementById('modalOverlay');
+    if (modal) modal.classList.add('hidden');
+    
     peer.incomingFile = null;
     peer.receivedChunks = [];
 }
 
 function renderVault() {
-    const list = getEl('vaultList');
+    const list = document.getElementById('vaultList');
     const placeholder = document.querySelector('#vault-view .thematic-placeholder');
     if (!list || !placeholder) return;
 
@@ -1056,14 +1065,14 @@ function renderVault() {
 
     list.innerHTML = vaultFiles.map((file, index) => `
         <div class="vault-item">
-                <div class="vault-item-info">
-                    <i class="ri-file-shield-line"></i>
-                    <div>
-                        <div class="vault-filename">${file.name}</div>
-                        <div class="vault-filesize">${(file.size / (1024*1024)).toFixed(2)} MB | ${file.timestamp} | FROM: ${file.sender}</div>
-                    </div>
+            <div class="vault-item-info">
+                <i class="ri-file-shield-line"></i>
+                <div>
+                    <div class="vault-filename">${file.name}</div>
+                    <div class="vault-filesize">${(file.size / (1024*1024)).toFixed(2)} MB | ${file.timestamp} | FROM: ${file.sender}</div>
                 </div>
-            <button class="btn-vault-download" onclick="downloadFromVault(${index})">
+            </div>
+            <button class="btn-vault-download" data-index="${index}" onclick="window.downloadFromVault(${index})">
                 <i class="ri-download-2-line"></i>
             </button>
         </div>
