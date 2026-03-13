@@ -566,6 +566,11 @@ function connectSignaling() {
                 if (displayId) displayId.textContent = myId.substring(0, 8).toUpperCase();
 
                 showToast(`NODE_READY: ${myName}`, 'success');
+                
+                // Clear existing peers to avoid ghosting on re-init
+                peers.forEach((_, id) => removePeer(id));
+                if (peersContainer) peersContainer.innerHTML = '';
+
                 msg.peers.forEach(p => addPeer(p.id, p.name, p.agentId));
                 
                 // If we scanned a QR, initiate discovery override
@@ -674,13 +679,22 @@ function showToast(message, type = 'success') {
 function addPeer(id, name, agentId = null) {
     if (peers.has(id)) return;
 
+    // DE-DUPLICATION: Check if we already have this Agent ID from a previous/ghost connection
+    if (agentId) {
+        for (const [existingId, data] of peers.entries()) {
+            if (data.agentId === agentId) {
+                console.log(`[DE-DUPE] Clearing ghost node for Agent: ${agentId}`);
+                removePeer(existingId);
+            }
+        }
+    }
+
     const radar = document.querySelector('.radar-container');
-    const width = radar ? radar.offsetWidth : 600;
-    const height = radar ? radar.offsetHeight : 600;
-    const containerSize = Math.min(width || 600, height || 600);
+    const containerSize = radar ? Math.min(radar.offsetWidth, radar.offsetHeight) : 500;
     
-    const angle = Math.random() * Math.PI * 2;
-    const dist = (containerSize * 0.35) * (0.6 + Math.random() * 0.4);
+    // Better distribution: Avoid clumping in center
+    const angle = (peers.size * (2.4)) + (Math.random() * 0.5); // Golden angle-ish distribution
+    const dist = (containerSize * 0.38) * (0.5 + (peers.size % 4) * 0.15); 
     
     const x = Math.cos(angle) * dist;
     const y = Math.sin(angle) * dist;
@@ -691,14 +705,16 @@ function addPeer(id, name, agentId = null) {
     el.innerHTML = `
         <div class="avatar">
             <i class="ri-broadcast-line"></i>
+            <div class="peer-status-ping"></div>
         </div>
         <div class="peer-details">
             <div class="peer-name">${name}</div>
             <div class="peer-id-label">${agentId ? `[ID: ${agentId}]` : '[ANONYMOUS]'}</div>
-            <button class="btn-peer-stabilize" title="RE-CONNECT_SIGNAL">
-                <i class="ri-refresh-line"></i>
-                STABILIZE
-            </button>
+            <div class="stabilize-drawer">
+                <button class="btn-peer-stabilize">
+                    <i class="ri-refresh-line"></i> STABILIZE
+                </button>
+            </div>
         </div>
     `;
 
@@ -1106,14 +1122,16 @@ async function startSendingFile(peerId) {
             offset += e.target.result.byteLength;
 
             if (offset < file.size) {
-                // High-performance backpressure: 1MB threshold
-                if (dc.bufferedAmount > 1024 * 1024) {
-                    // Use onbufferedamountlow for even better performance if supported,
-                    // but for now, a short delay is robust across all browsers.
-                    setTimeout(() => readSlice(offset), 50);
+                // High-performance backpressure: 512KB threshold (more aggressive than 1MB)
+                if (dc.bufferedAmount > 512 * 1024) {
+                    setTimeout(() => readSlice(offset), 20); // Faster polling
                 } else {
-                    // Micro-task yield to keep UI responsive
-                    setTimeout(() => readSlice(offset), 0);
+                    // Micro-task yield to keep UI responsive without artificial lag
+                    if (offset % (CHUNK_SIZE * 4) === 0) {
+                        setTimeout(() => readSlice(offset), 0);
+                    } else {
+                        readSlice(offset);
+                    }
                 }
             } else {
                 dc.send(JSON.stringify({ type: 'file-complete' }));

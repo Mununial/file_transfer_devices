@@ -822,6 +822,41 @@ input:checked + .slider:before {
   color: black;
 }
 
+.peer-node:hover .stabilize-drawer {
+    max-height: 40px;
+    opacity: 1;
+    margin-top: 5px;
+}
+
+.stabilize-drawer {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.btn-peer-stabilize {
+    background: rgba(57, 255, 20, 0.1);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    padding: 4px 8px;
+    font-size: 0.6rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.peer-status-ping {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 5px var(--success);
+    animation: pulse-green 1.5s infinite;
+}
+
 .peer-name {
   margin-top: 0.5rem;
   font-size: 0.75rem;
